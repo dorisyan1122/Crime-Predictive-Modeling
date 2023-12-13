@@ -1,0 +1,170 @@
+---
+title: "Final Project"
+author: "Ziwen Lu, Xuyan Xiu, Doris Yan"
+format: html
+editor: visual
+execute: 
+  warning: false
+embed-resources: true
+---
+
+```{r load libraries, echo=FALSE}
+library(haven)
+library(here)
+library(tidyverse)
+```
+
+```{r load datasets}
+crime<-read_dta(here("data","crime_county_2002-2014.dta"))
+healthcare<-read.csv(here("data","healthcare_tract_2003-2017.csv"))
+lawenf<-read.csv(here("data","lawenf_tract_2003-2017.csv"))
+schoolct<-read.csv(here("data","schoolct_tract_2000-2018.csv"))
+social<-read.csv(here("data","socsvcs_tract_2003-2017.csv"))
+ses_1<-read.csv(here("data","ses_tract_2000-2010.csv"))
+ses_2<-read.csv(here("data","ses_tract_2008-2017.csv"))
+```
+
+```{r load datasets}
+library(tidycensus)
+library(tidyverse)
+
+census_api_key("bac26242b8fa18bdc4d605af68e321ef2a0c6c74")
+
+v17 <- load_variables(2017, "acs1", cache = TRUE)
+
+View(v17)
+```
+
+## Data Wrangling
+### Crime
+```{r}
+# Select the two types of crimes: violent crime and property crime
+crime_cleaned<-crime|>
+  rename_all(tolower)|>
+  rename(county=stcofips)|>
+  mutate(viol = murder+rape+robbery+agasslt)|>
+  mutate(property = burglry+larceny+mvtheft)|>
+  select(county,year,cpoparst,viol,property)|>
+  filter(year!=2002)
+
+attr(crime_cleaned$viol, "label")<-"Total violent crimes reported (MURDER + RAPE + ROBBERY + AGASSLT)"
+
+attr(crime_cleaned$property, "label")<-"Total property crimes reported (BURGLRY + LARCENY + MVTHEFT)"
+```
+
+### Explanatory Variables 2003-2014
+```{r}
+# Create a function for data cleaning
+clean_data <- function(data) {
+  cleaned_data <- data |> 
+    filter(year >= 2003 & year <= 2014) |> 
+    # Add "0" to the front of every 10-digit census tract FIPS so that all census tract FIPS are 11-digit
+    mutate(
+      tract_fips10 = ifelse(tract_fips10 < 1e10,
+                            paste0("0", as.character(tract_fips10)),
+                            as.character(tract_fips10)),
+      county = substr((tract_fips10), 1, 5)
+    ) |> 
+    select(-tract_fips10) |>
+    # Summing up the rest of the variables in each county every year
+    group_by(year, county) |> 
+    summarise_all(sum,na.rm = TRUE)
+
+  return(cleaned_data)
+}
+healthcare_cleaned <- clean_data(healthcare)
+schoolct_cleaned<-clean_data(schoolct)
+social_cleaned<-clean_data(social)
+lawenf_cleaned<-clean_data(lawenf)
+```
+
+### SES 2003-2010
+```{r}
+clean_ses<-function(ses){
+  cleaned_ses<-ses|>
+   # Keeping year 2003 to 2010
+  select(-matches("00|01|02"))|>
+  # Only keeping the derived SES indicators
+  select(tract_fips10,
+         matches("popden|disadvantage|affluence|ethnicimmigrant"))|>
+  # Summing up values in each county every year from 2002 to 2010
+  mutate(
+    tract_fips10 = ifelse(tract_fips10 < 1e10,
+                            paste0("0", as.character(tract_fips10)),
+                            as.character(tract_fips10)),
+      county = substr((tract_fips10), 1, 5)
+  )|>
+  select(-tract_fips10)|>
+  group_by(county)|>
+  summarise_all(sum, na.rm = TRUE)|>
+  # Pivot SES indicators as values
+  pivot_longer(
+  cols = !county, 
+  names_to = "variable",
+  values_to = "value"
+  )|>
+  # Using regex to separate SES indicator and year
+  separate(variable, into = c("metric", "year"), 
+           sep = "(?<=\\D)(?=\\d{2})")|>
+  # Pivot SES indicators back as variables
+  pivot_wider(
+    names_from = metric,
+    values_from = value
+  )
+  return(cleaned_ses)
+  }
+
+ses1_cleaned<-clean_ses(ses_1)|>
+  mutate(year = paste0("20",year))
+```
+
+### SES 2011-2014
+```{r}
+# Use the 2008-2012 estimate for year 2011 and 2012
+# Use the 2013-2017 estimate for year 2013 and 2014
+ses2_cleaned<-ses_2|>
+  clean_ses()|>
+  mutate(year = paste0("20",year)
+         )|>
+  mutate(year = str_replace_all(year, "_", ""))|>
+  # Repeat every row once, because each other row represents either 2008-2012 estimate or 2013-2017 estimate. With the repetition, we have four-year estimate (2011-2014) for every county 
+  slice(rep(1:n(), each = 2))|>
+  mutate(year = rep(c("2011", "2012", "2013", "2014"),
+                    length.out = n()
+                    )
+         )
+
+# Transform the data type of year into numeric 
+ses1_cleaned$year <- as.numeric(ses1_cleaned$year)
+ses2_cleaned$year <- as.numeric(ses2_cleaned$year)
+
+ses_final_cleaned<-full_join(ses1_cleaned,ses2_cleaned)
+
+```
+
+### Combine All Datasets
+```{r}
+# combine the data sets with the by "county" and "year" columns
+crime_all <- full_join(
+  crime_cleaned,
+  full_join(
+    ses_final_cleaned,
+   full_join(
+     healthcare_cleaned,
+    full_join(
+      schoolct_cleaned,
+      full_join(
+        social_cleaned, lawenf_cleaned, by = c("county", "year")
+        ),
+      by = c("county", "year")
+    ),
+    by = c("county", "year")
+  ),
+  by = c("county", "year")
+),
+by = c("county","year")
+)
+
+# Remove duplicate columns such as population
+crime_all_cleaned<-crime_all[!duplicated(as.list(crime_all))]
+```
