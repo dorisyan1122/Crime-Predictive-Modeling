@@ -13,9 +13,6 @@ library(haven)
 library(here)
 library(tidyverse)
 library(icpsrdata)
-library(tidycensus)
-library(rvest)
-library(httr)
 dir.create("data")
 ```
 
@@ -81,16 +78,6 @@ icpsr_download(
 streetcon<-read_dta(here("data","ICPSR_38580","DS0001","38580-0001-Data.dta"))
 ```
 
-## traffic
-```{r}
-# takes 1-2 mins
-icpsr_download(
-  file_id = 38584,
-  download_dir = here("data")
-)
-
-traffic<-read_dta(here("data","ICPSR_38584","DS0001","38584-0001-Data.dta"))
-```
 
 ## pollution
 ```{r}
@@ -169,7 +156,7 @@ clean_data<-
 ## ses
 ```{r}
 #  ACS five-year estimate 2013-2017
-ses_2013<-clean_data(ses11_14)|>
+ses_2013<-clean_data(ses08_17)|>
   group_by(county)|>
   summarise_all(sum, na.rm = TRUE)|>
   pivot_longer(
@@ -210,14 +197,6 @@ streetcon_2013<-clean_data(streetcon)|>
   summarise_all(sum, na.rm = TRUE)
 ```
 
-## traffic
-```{r}
-# traffic in 2013
-traffic_2013<-clean_data(traffic)|>
-  group_by(county,year)|>
-  summarise_all(sum, na.rm = TRUE)|>
-  filter(year == 2013)
-```
 
 ## pollution
 ```{r}
@@ -269,8 +248,6 @@ crime_all <- full_join(
       parks_2013,
       full_join(
         streetcon_2013,
-        full_join(
-          traffic_2013,
           full_join(
             pollution_2013, 
             full_join(
@@ -289,15 +266,8 @@ crime_all <- full_join(
     by = "county"
     ),
    by = "county"
-  ),
-  by = "county"
-)
+  )
 
 crime_all<-crime_all|>
-  select(-year.y, -year.x, -year.y.y)|>
-  rename(year = year.x.x)
-```
-
-```{r}
-glimpse(crime_all)
+  select(-year.y, -year.x)
 ```
