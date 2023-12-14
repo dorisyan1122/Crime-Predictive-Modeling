@@ -12,159 +12,292 @@ embed-resources: true
 library(haven)
 library(here)
 library(tidyverse)
-```
-
-```{r load datasets}
-crime<-read_dta(here("data","crime_county_2002-2014.dta"))
-healthcare<-read.csv(here("data","healthcare_tract_2003-2017.csv"))
-lawenf<-read.csv(here("data","lawenf_tract_2003-2017.csv"))
-schoolct<-read.csv(here("data","schoolct_tract_2000-2018.csv"))
-social<-read.csv(here("data","socsvcs_tract_2003-2017.csv"))
-ses_1<-read.csv(here("data","ses_tract_2000-2010.csv"))
-ses_2<-read.csv(here("data","ses_tract_2008-2017.csv"))
-```
-
-```{r load datasets}
+library(icpsrdata)
 library(tidycensus)
-library(tidyverse)
-
-census_api_key("bac26242b8fa18bdc4d605af68e321ef2a0c6c74")
-
-v17 <- load_variables(2017, "acs1", cache = TRUE)
-
-View(v17)
+library(rvest)
+library(httr)
+dir.create("data")
 ```
 
-## Data Wrangling
-### Crime
+# Reproducible data retrieval
 ```{r}
-# Select the two types of crimes: violent crime and property crime
-crime_cleaned<-crime|>
+options("icpsr_email" = "dy212@georgetown.edu", "icpsr_password" = "Fbp9nbmKreLsubd8nL5H")
+```
+
+
+## crime
+```{r}
+# takes 1-2 mins
+icpsr_download(
+  file_id = 38649,
+  download_dir = here("data")
+)
+
+crime<-read_dta(here("data","ICPSR_38649","DS0001","38649-0001-Data.dta"))
+```
+
+## ses
+```{r}
+# takes 9-10 mins
+icpsr_download(
+  file_id = 38528,
+  download_dir = here("data")
+)
+
+ses08_17<-read_dta(here("data","ICPSR_38528","DS0002","38528-0002-Data.dta"))
+```
+
+## school counts
+```{r}
+# takes 1-2 mins
+icpsr_download(
+  file_id = 38569,
+  download_dir = here("data")
+)
+
+schoolct<-read_dta(here("data","ICPSR_38569","DS0001","38569-0001-Data.dta"))
+```
+
+
+## the number of parks
+```{r}
+# takes 1-2 mins
+icpsr_download(
+  file_id = 38586,
+  download_dir = here("data")
+)
+
+parks<-read_dta(here("data","ICPSR_38586","DS0001","38586-0001-Data.dta"))
+```
+
+## street connectivity
+```{r}
+# takes 1-2 mins
+icpsr_download(
+  file_id = 38580,
+  download_dir = here("data")
+)
+
+streetcon<-read_dta(here("data","ICPSR_38580","DS0001","38580-0001-Data.dta"))
+```
+
+## traffic
+```{r}
+# takes 1-2 mins
+icpsr_download(
+  file_id = 38584,
+  download_dir = here("data")
+)
+
+traffic<-read_dta(here("data","ICPSR_38584","DS0001","38584-0001-Data.dta"))
+```
+
+## pollution
+```{r}
+# takes 1 min
+icpsr_download(
+  file_id = 38597,
+  download_dir = here("data")
+)
+
+pollution<-read_dta(here("data","ICPSR_38597","DS0001","38597-0001-Data.dta"))
+```
+
+## urbanicity
+```{r}
+# takes 1 min
+icpsr_download(
+  file_id = 38606,
+  download_dir = here("data")
+)
+
+urban<-read_dta(here("data","ICPSR_38606","DS0001","38606-0001-Data.dta"))
+```
+
+## land cover
+```{r}
+# takes 1-2 min
+icpsr_download(
+  file_id = 38598,
+  download_dir = here("data")
+)
+
+landcover<-read_dta(here("data","ICPSR_38598","DS0001","38598-0001-Data.dta"))
+```
+## road system
+```{r}
+# takes 1-2 min
+icpsr_download(
+  file_id = 38585,
+  download_dir = here("data")
+)
+
+road<-read_dta(here("data","ICPSR_38585","DS0001","38585-0001-Data.dta"))
+```
+# Clean data
+
+## crime
+```{r}
+# crime data at 2013
+crime_data<-crime|>
   rename_all(tolower)|>
   rename(county=stcofips)|>
   mutate(viol = murder+rape+robbery+agasslt)|>
   mutate(property = burglry+larceny+mvtheft)|>
-  select(county,year,cpoparst,viol,property)|>
-  filter(year!=2002)
+  select(county,year,viol,property)
 
-attr(crime_cleaned$viol, "label")<-"Total violent crimes reported (MURDER + RAPE + ROBBERY + AGASSLT)"
+attr(crime_data$viol, "label")<-"Total violent crimes reported (MURDER + RAPE + ROBBERY + AGASSLT)"
 
-attr(crime_cleaned$property, "label")<-"Total property crimes reported (BURGLRY + LARCENY + MVTHEFT)"
+attr(crime_data$property, "label")<-"Total property crimes reported (BURGLRY + LARCENY + MVTHEFT)"
+
+crime_2013<-crime_data|>
+  filter(year == 2013)
 ```
 
-### Explanatory Variables 2003-2014
 ```{r}
-# Create a function for data cleaning
-clean_data <- function(data) {
-  cleaned_data <- data |> 
-    filter(year >= 2003 & year <= 2014) |> 
-    # Add "0" to the front of every 10-digit census tract FIPS so that all census tract FIPS are 11-digit
-    mutate(
-      tract_fips10 = ifelse(tract_fips10 < 1e10,
-                            paste0("0", as.character(tract_fips10)),
-                            as.character(tract_fips10)),
-      county = substr((tract_fips10), 1, 5)
-    ) |> 
-    select(-tract_fips10) |>
-    # Summing up the rest of the variables in each county every year
-    group_by(year, county) |> 
-    summarise_all(sum,na.rm = TRUE)
+clean_data<-
+  function(data) {
+    cleaned_data <- data |> 
+      rename_all(tolower)|>
+      mutate(county = substr((tract_fips10), 1, 5))|>
+      select(-tract_fips10)
 
   return(cleaned_data)
 }
-healthcare_cleaned <- clean_data(healthcare)
-schoolct_cleaned<-clean_data(schoolct)
-social_cleaned<-clean_data(social)
-lawenf_cleaned<-clean_data(lawenf)
 ```
 
-### SES 2003-2010
+## ses
 ```{r}
-clean_ses<-function(ses){
-  cleaned_ses<-ses|>
-   # Keeping year 2003 to 2010
-  select(-matches("00|01|02"))|>
-  # Only keeping the derived SES indicators
-  select(tract_fips10,
-         matches("popden|disadvantage|affluence|ethnicimmigrant"))|>
-  # Summing up values in each county every year from 2002 to 2010
-  mutate(
-    tract_fips10 = ifelse(tract_fips10 < 1e10,
-                            paste0("0", as.character(tract_fips10)),
-                            as.character(tract_fips10)),
-      county = substr((tract_fips10), 1, 5)
-  )|>
-  select(-tract_fips10)|>
+#  ACS five-year estimate 2013-2017
+ses_2013<-clean_data(ses11_14)|>
   group_by(county)|>
   summarise_all(sum, na.rm = TRUE)|>
-  # Pivot SES indicators as values
   pivot_longer(
   cols = !county, 
-  names_to = "variable",
+  names_to = "indicator",
   values_to = "value"
   )|>
-  # Using regex to separate SES indicator and year
-  separate(variable, into = c("metric", "year"), 
-           sep = "(?<=\\D)(?=\\d{2})")|>
-  # Pivot SES indicators back as variables
+  filter(str_sub(indicator, -2) == "17")|>
+  # pivot SES indicators back as variables
   pivot_wider(
-    names_from = metric,
+    names_from = indicator,
     values_from = value
   )
-  return(cleaned_ses)
-  }
-
-ses1_cleaned<-clean_ses(ses_1)|>
-  mutate(year = paste0("20",year))
 ```
 
-### SES 2011-2014
+## school counts
 ```{r}
-# Use the 2008-2012 estimate for year 2011 and 2012
-# Use the 2013-2017 estimate for year 2013 and 2014
-ses2_cleaned<-ses_2|>
-  clean_ses()|>
-  mutate(year = paste0("20",year)
-         )|>
-  mutate(year = str_replace_all(year, "_", ""))|>
-  # Repeat every row once, because each other row represents either 2008-2012 estimate or 2013-2017 estimate. With the repetition, we have four-year estimate (2011-2014) for every county 
-  slice(rep(1:n(), each = 2))|>
-  mutate(year = rep(c("2011", "2012", "2013", "2014"),
-                    length.out = n()
-                    )
-         )
-
-# Transform the data type of year into numeric 
-ses1_cleaned$year <- as.numeric(ses1_cleaned$year)
-ses2_cleaned$year <- as.numeric(ses2_cleaned$year)
-
-ses_final_cleaned<-full_join(ses1_cleaned,ses2_cleaned)
-
+# school counts at 2013
+schoolct_2013<-clean_data(schoolct)|>
+  group_by(county,year)|>
+  summarise_all(sum, na.rm = TRUE)|>
+  filter(year == 2013)
 ```
 
-### Combine All Datasets
+##  parks
+```{r}
+# from 2010 decennial census
+parks_2013<-clean_data(parks)|>
+  group_by(county)|>
+  summarise_all(sum, na.rm = TRUE)
+```
+
+## street connectivity
+```{r}
+# from 2010 decennial census
+streetcon_2013<-clean_data(streetcon)|>
+  group_by(county)|>
+  summarise_all(sum, na.rm = TRUE)
+```
+
+## traffic
+```{r}
+# traffic in 2013
+traffic_2013<-clean_data(traffic)|>
+  group_by(county,year)|>
+  summarise_all(sum, na.rm = TRUE)|>
+  filter(year == 2013)
+```
+
+## pollution
+```{r}
+# pollution in 2013
+pollution_2013<-clean_data(pollution)|>
+  group_by(county,year)|>
+  summarise_all(sum, na.rm = TRUE)|>
+  filter(year == 2013)
+```
+
+## urbanicity
+```{r}
+# from 2010 decennial census
+urban_2013<-clean_data(urban)|>
+  group_by(county)|>
+  summarise_all(sum, na.rm = TRUE)
+```
+
+## land cover
+```{r}
+# from 2010 decennial census
+landcover_2013<-landcover|>
+  rename_all(tolower)|>
+  mutate(county = substr((tract_fips), 1, 5))|>
+  select(-tract_fips)|>
+  group_by(county)|>
+  summarise_all(sum, na.rm = TRUE)
+```
+
+## road system
+```{r}
+# from 2010 decennial census
+road_2013<-clean_data(road)|>
+  group_by(county)|>
+  summarise_all(sum, na.rm = TRUE)
+```
+
+# Combine All Datasets
+
 ```{r}
 # combine the data sets with the by "county" and "year" columns
 crime_all <- full_join(
-  crime_cleaned,
+  crime_2013,
   full_join(
-    ses_final_cleaned,
+    ses_2013,
    full_join(
-     healthcare_cleaned,
+     schoolct_2013,
     full_join(
-      schoolct_cleaned,
+      parks_2013,
       full_join(
-        social_cleaned, lawenf_cleaned, by = c("county", "year")
+        streetcon_2013,
+        full_join(
+          traffic_2013,
+          full_join(
+            pollution_2013, 
+            full_join(
+              urban_2013,
+              full_join(
+                landcover_2013, road_2013, by = "county")
+              ),
+            by = "county"
+            ),
+          by = "county"
+          ),
+        by = "county"
         ),
-      by = c("county", "year")
+      by = "county"
+      ),
+    by = "county"
     ),
-    by = c("county", "year")
+   by = "county"
   ),
-  by = c("county", "year")
-),
-by = c("county","year")
+  by = "county"
 )
 
-# Remove duplicate columns such as population
-crime_all_cleaned<-crime_all[!duplicated(as.list(crime_all))]
+crime_all<-crime_all|>
+  select(-year.y, -year.x, -year.y.y)|>
+  rename(year = year.x.x)
+```
+
+```{r}
+glimpse(crime_all)
 ```
