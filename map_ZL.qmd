@@ -40,7 +40,7 @@ crime<-read_dta(here("data","ICPSR_38649","DS0001","38649-0001-Data.dta"))
 ## crime
 
 ```{r}
-# crime data at 2013
+# crime data
 crime_data<-crime|>
   rename_all(tolower)|>
   rename(county=stcofips)|>
