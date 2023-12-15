@@ -9,6 +9,7 @@ embed-resources: true
 ---
 
 # Load libraries and create directory for data download
+
 ```{r, echo=FALSE}
 library(haven)
 library(here)
@@ -18,12 +19,13 @@ dir.create("data")
 ```
 
 # Reproducible data retrieval
+
 ```{r}
 options("icpsr_email" = "dy212@georgetown.edu", "icpsr_password" = "Fbp9nbmKreLsubd8nL5H")
 ```
 
-
 ## crime
+
 ```{r}
 # takes 1-2 mins
 icpsr_download(
@@ -35,6 +37,7 @@ crime<-read_dta(here("data","ICPSR_38649","DS0001","38649-0001-Data.dta"))
 ```
 
 ## ses
+
 ```{r}
 # takes 9-10 mins
 icpsr_download(
@@ -46,6 +49,7 @@ ses08_17<-read_dta(here("data","ICPSR_38528","DS0002","38528-0002-Data.dta"))
 ```
 
 ## school counts
+
 ```{r}
 # takes 1-2 mins
 icpsr_download(
@@ -56,8 +60,8 @@ icpsr_download(
 schoolct<-read_dta(here("data","ICPSR_38569","DS0001","38569-0001-Data.dta"))
 ```
 
-
 ## the number of parks
+
 ```{r}
 # takes 1-2 mins
 icpsr_download(
@@ -69,6 +73,7 @@ parks<-read_dta(here("data","ICPSR_38586","DS0001","38586-0001-Data.dta"))
 ```
 
 ## street connectivity
+
 ```{r}
 # takes 1-2 mins
 icpsr_download(
@@ -79,8 +84,8 @@ icpsr_download(
 streetcon<-read_dta(here("data","ICPSR_38580","DS0001","38580-0001-Data.dta"))
 ```
 
-
 ## pollution
+
 ```{r}
 # takes 1 min
 icpsr_download(
@@ -92,6 +97,7 @@ pollution<-read_dta(here("data","ICPSR_38597","DS0001","38597-0001-Data.dta"))
 ```
 
 ## urbanicity
+
 ```{r}
 # takes 1 min
 icpsr_download(
@@ -103,6 +109,7 @@ urban<-read_dta(here("data","ICPSR_38606","DS0001","38606-0001-Data.dta"))
 ```
 
 ## land cover
+
 ```{r}
 # takes 1-2 min
 icpsr_download(
@@ -112,7 +119,9 @@ icpsr_download(
 
 landcover<-read_dta(here("data","ICPSR_38598","DS0001","38598-0001-Data.dta"))
 ```
+
 ## road system
+
 ```{r}
 # takes 1-2 min
 icpsr_download(
@@ -122,15 +131,17 @@ icpsr_download(
 
 road<-read_dta(here("data","ICPSR_38585","DS0001","38585-0001-Data.dta"))
 ```
+
 # Clean data
 
 ## crime
+
 ```{r}
 # crime data at 2013
 crime_data<-crime|>
   rename_all(tolower)|>
   rename(county=stcofips)|>
-  select(county,year,viol,property)
+  select(county,year,viol,property,cpopcrim)
 
 crime_2013<-crime_data|>
   filter(year == 2013)
@@ -149,6 +160,7 @@ clean_data<-
 ```
 
 ## ses
+
 ```{r}
 #  ACS five-year estimate 2013-2017
 ses_2013<-clean_data(ses08_17)|>
@@ -168,6 +180,7 @@ ses_2013<-clean_data(ses08_17)|>
 ```
 
 ## school counts
+
 ```{r}
 # school counts at 2013
 schoolct_2013<-clean_data(schoolct)|>
@@ -176,7 +189,8 @@ schoolct_2013<-clean_data(schoolct)|>
   filter(year == 2013)
 ```
 
-##  parks
+## parks
+
 ```{r}
 # from 2010 decennial census
 parks_2013<-clean_data(parks)|>
@@ -185,6 +199,7 @@ parks_2013<-clean_data(parks)|>
 ```
 
 ## street connectivity
+
 ```{r}
 # from 2010 decennial census
 streetcon_2013<-clean_data(streetcon)|>
@@ -192,8 +207,8 @@ streetcon_2013<-clean_data(streetcon)|>
   summarise_all(sum, na.rm = TRUE)
 ```
 
-
 ## pollution
+
 ```{r}
 # pollution in 2013
 pollution_2013<-clean_data(pollution)|>
@@ -203,6 +218,7 @@ pollution_2013<-clean_data(pollution)|>
 ```
 
 ## urbanicity
+
 ```{r}
 # from 2010 decennial census
 urban_2013<-clean_data(urban)|>
@@ -211,6 +227,7 @@ urban_2013<-clean_data(urban)|>
 ```
 
 ## land cover
+
 ```{r}
 # from 2010 decennial census
 landcover_2013<-landcover|>
@@ -222,6 +239,7 @@ landcover_2013<-landcover|>
 ```
 
 ## road system
+
 ```{r}
 # from 2010 decennial census
 road_2013<-clean_data(road)|>
