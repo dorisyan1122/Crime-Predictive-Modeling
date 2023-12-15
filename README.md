@@ -5,3 +5,5 @@ Ziwen Lu, Xuyan Xiu, Doris Yan's final project
 Links to all data: https://www.icpsr.umich.edu/web/ICPSR/series/1920
 
 map tutorial: https://plotly.com/r/choropleth-maps/
+
+GitHub pages: https://dorisyan1122.github.io/PPOL6819-Final-Project/
