@@ -11,13 +11,33 @@ embed-resources: true
 library(tidyverse)
 library(tidymodels)
 library(ggplot2)
+library(vip)
+```
+
+# Data Cleaning
+
+```{r}
+attr(crime_all$viol, "format.stata") <- NULL
+attr(crime_all$property, "format.stata") <- NULL
+
+attr(crime_all$viol, "label") <- NULL
+attr(crime_all$property, "label") <- NULL
+
+crime_all <- crime_all[!is.na(crime_all$viol), ]
+crime_all <- crime_all[!is.na(crime_all$property), ]
+
+crime_all$log_viol <- log(crime_all$viol)
+crime_all <- crime_all[crime_all$log_viol != -Inf, ]
+
+crime_all$log_property <- log(crime_all$property)
+crime_all <- crime_all[crime_all$log_property != -Inf, ]
 ```
 
 # Spliting Data
 
 ```{r}
 set.seed(904)
-crime_split <- initial_split(crime_all_cleaned, prop = 0.8)
+crime_split <- initial_split(crime_all, prop = 0.8)
 
 crime_train <- training(crime_split)
 crime_test <- testing(crime_split)
@@ -30,150 +50,68 @@ set.seed(904)
 crime_folds <- vfold_cv(data = crime_train, v = 5)
 ```
 
-# Ridge Regression
+# Violent Crime
+## Ridge Regression
 
-## feature and target engineering
+### feature and target engineering
 
-```{r}
-fit_ridge <- function(data, penalty) {
-  
-  # create a recipe
-  ridge_rec <- 
-    recipe(viol ~ ., data = crime_train) |>
-    step_impute_median(all_predictors())|>
-    update_role(county, 
-              year, 
-              new_role = "id") |>
-    step_normalize(all_predictors())
-  
-  # model
-  ridge_mod <- 
-    linear_reg(penalty = penalty, mixture = 0) |>
-    set_mode(mode = "regression") |>
-    set_engine(engine = "glmnet")  
-  
-  ridge_wf <- workflow() |>
-    add_recipe(recipe = ridge_rec) |>
-    add_model(spec = ridge_mod)
-  
-  ridge_wf |>
-    fit(data = crime_train) |>
-    extract_fit_parsnip() |>
-    tidy() |>
-    mutate(penalty = penalty)
+```{r} 
+# recipe
+ridge_rec <- recipe(log_viol ~ ., 
+           data = crime_train) |>
+    step_impute_median(all_numeric_predictors())|>
+    update_role(county,
+                year,
+                property,
+                new_role = "id") |>
+  step_normalize(all_numeric_predictors())
 
-}
-```
-
-
-```{r}
-ridge_fit <- seq(0, 50, 1) |>
-  map_dfr(.f = ~ fit_ridge(crime_train, .x))
-```
-
-
-```{r}
-ggplot() +
-  geom_line(
-    data = filter(ridge_fit, term != "(Intercept)"),
-    mapping = aes(penalty, estimate, group = term),
-    alpha = 0.4
-  ) +
-  geom_point(
-    data = filter(ridge_fit, term != "(Intercept)", penalty == 0),
-    mapping = aes(penalty, estimate),
-    color = "red"
-  )
-```
-
-## ridge new
-```{r}
-# create a recipe
-ridge_rec <- 
-  recipe(viol ~ ., data = crime_train) |>
-  update_role(county, 
-              year, 
-              new_role = "id") |>
-  step_impute_mean(all_predictors())|>
-  step_normalize(all_predictors()) |>
-  step_dummy(all_nominal_predictors())
-
-# tuning grid
-ridge_grid <- 
-  grid_regular(penalty(range = c(0.001, 10)), levels = 20)
+ridge_rec_summary<-summary(ridge_rec)
 
 # model
 ridge_mod <- 
-  linear_reg(penalty = penalty, 
+  linear_reg(penalty = tune(), 
              mixture = 0) |>
   set_mode(mode = "regression") |>
-  set_engine(engine = "glmnet") |>
-  set_args(penalty = tune())
-
-# workflow
-ridge_wf <- workflow() |>
+  set_engine(engine = "glmnet")  
+  
+ridge_grid <- 
+  grid_regular(penalty(), 
+               levels = 1)
+  
+ridge_wf <- 
+  workflow() |>
   add_recipe(recipe = ridge_rec) |>
   add_model(spec = ridge_mod)
 ```
 
-```{r}
-tune_results <- tune_grid(
-  object = ridge_wf,
-  resamples = crime_folds,
-  grid = ridge_grid,
-  metrics = metric_set(rmse)
-)
-
-best_penalty <- select_best(tune_results, "rmse")
-
-final_ridge_mod <- linear_reg(penalty = best_penalty$penalty, mixture = 0) %>%
-  set_mode("regression") %>%
-  set_engine("glmnet")
-
-final_ridge_wf <- workflow() %>%
-  add_recipe(ridge_rec) %>%
-  add_model(final_ridge_mod)
-
-final_fit <- final_ridge_wf %>%
-  fit(data = crime_train)
-
-```
-
-## choose the best model
+### choose the best model
 
 ```{r}
-set.seed(904)
-ridge_resamples<- 
-  ridge_wf|>
+ridge_resamples <-
+  ridge_wf |>
   tune_grid(
     resamples = crime_folds,
-    grid = ridge_grid,
-    metrics = metric_set(rmse)
-    )
+    grid = ridge_grid
+  )
 
 collect_metrics(ridge_resamples)
-  
-top_ridge_models <-
-  ridge_resamples |>
-  show_best() |>
-  arrange(penalty) 
-
-ridge_resamples|>
-  select_best()
 ```
 
-# Lasso
+## Lasso
 
-## feature and target engineering
+### feature and target engineering
 
 ```{r}
 lasso_rec <-
-    recipe(viol ~ ., data = crime_train) |>
-    step_impute_median(all_predictors())|>
-    update_role(county, 
-              year, 
-              new_role = "id") |>
-    step_normalize(all_predictors()) 
+    recipe(log_viol ~ ., 
+           data = crime_train) |>
+    step_impute_median(all_numeric_predictors())|>
+    update_role(county,
+                year,
+                property,
+                new_role = "id") |>
+  step_normalize(all_numeric_predictors())
 
 # check if feature engineering works to remove variables
 lasso_summary<-summary(lasso_rec)
@@ -193,7 +131,7 @@ lasso_wf <-
   add_model(spec = lasso_mod)
 ```
 
-## choose the best model
+### choose the best model
 
 ```{r}
 set.seed(904)
@@ -202,7 +140,6 @@ lasso_resamples<-
   tune_grid(
     resamples = crime_folds,
     grid = lasso_grid,
-    metrics = metric_set(rmse)
     )
 
 lasso_resamples |>
@@ -220,19 +157,19 @@ lasso_resamples|>
   autoplot()
 ```
 
-# Random Forest
+## Random Forest
 
-## feature and target engineering
+### feature and target engineering
 
 ```{r}
 rf_rec <- 
-  recipe(viol ~ ., crime_train) |>
+  recipe(log_viol ~ ., 
+         crime_train) |>
    step_impute_median(all_predictors())|>
    update_role(county, 
               year, 
+              property,
               new_role = "id")
-
-rf_rec_summary<-summary(rf_rec)
 
 rf_mod <- 
   rand_forest(
@@ -258,7 +195,7 @@ rf_grid <- grid_regular(
 )
 ```
 
-## choose the best model
+### choose the best model
 
 ```{r}
 set.seed(904)
@@ -277,21 +214,38 @@ select_best(rf_resamples)
 autoplot(rf_resamples)
 ```
 
-## variable importance
+## Linear Regression
+
+### feature and target engineering
 
 ```{r}
-# Selecting the top 25 important variables
-rf_fit <- rf_final_wf |>
-  fit(data = crime_train)
+# build a linear regression recipe
+lm_rec <-
+  recipe(log_viol ~ ., 
+         data = crime_train) |>
+   step_impute_median(all_predictors())|>
+   update_role(county, 
+              year, 
+              property,
+              new_role = "id")
 
-rf_fit|>
-  extract_fit_parsnip()|>
-  vip(num_features = 20) %>%
-  .$data |>
-  mutate(
-    Importance = Importance / max(Importance),
-    Variable = fct_reorder(.x = Importance, .f = Variable)
-  ) |>
-  ggplot(aes(Importance, Variable)) +
-  geom_col()
+lm_mod <- linear_reg() |>
+  set_mode(mode = "regression") |>
+  set_engine(engine = "lm")
+
+lm_wf <- workflow() |>
+  add_recipe(lm_rec) |>
+  add_model(lm_mod)
 ```
+
+### choose the best model
+
+```{r}
+set.seed(904)
+lm_resamples <- lm_wf |>
+  fit_resamples(resamples = crime_folds)
+
+lm_resamples |>
+  collect_metrics()
+```
+
