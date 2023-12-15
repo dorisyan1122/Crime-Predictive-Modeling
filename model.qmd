@@ -85,7 +85,7 @@ crime_folds <- vfold_cv(data = crime_train, v = 5)
 
 ```{r}
 # create a recipe
-ridge_rec <- 
+ridge_v_rec <- 
   recipe(log_viol ~ .,
          data = crime_train) |>
   update_role(county,
@@ -99,48 +99,68 @@ ridge_rec <-
   step_normalize(all_predictors())
  
 # check if feature engineering works to remove variables
-ridge_summary<-summary(ridge_rec)
+ridge_v_summary<-summary(ridge_v_rec)
 
 # model
-ridge_mod <- 
+ridge_v_mod <- 
   linear_reg(penalty = tune(), mixture = 0) |>
   set_mode(mode = "regression") |>
   set_engine(engine = "glmnet")  
 
-ridge_grid<-
+ridge_v_grid<-
   grid_regular(penalty(),
                levels = 20)
 # workflow
-ridge_wf <- 
+ridge_v_wf <- 
   workflow() |>
-  add_recipe(recipe = ridge_rec) |>
-  add_model(spec = ridge_mod)
+  add_recipe(recipe = ridge_v_rec) |>
+  add_model(spec = ridge_v_mod)
 ```
 
 ### choose the best model
 
 ```{r}
-ridge_resamples <-
-  ridge_wf |>
+ridge_v_resamples <-
+  ridge_v_wf |>
   tune_grid(
     resamples = crime_folds,
-    grid = ridge_grid,
+    grid = ridge_v_grid,
     metrics = metric_set(rmse)
     )
 
-ridge_resamples |>
+ridge_v_resamples |>
   collect_metrics()
 
-top_ridge_models <-
-  ridge_resamples |>
+top_ridge_v_models <-
+  ridge_v_resamples |>
   show_best() |>
   arrange(penalty) 
 
-ridge_resamples|>
+ridge_v_resamples|>
   select_best()
 
-ridge_resamples|>
+ridge_v_resamples|>
   autoplot()
+```
+
+### Prediction
+
+```{r}
+set.seed(904)
+ridge_v_pre_wf <- 
+  ridge_v_wf |> 
+  finalize_workflow(select_best(ridge_v_resamples))
+
+ridge_v_pre_wf<-
+  fit(ridge_v_pre_wf, 
+      data = crime_train)
+
+ridge_v_predictions <- 
+  predict(object = ridge_v_pre_wf, 
+          new_data = crime_test)$.pred
+
+county <-
+  crime_test$county
 ```
 
 ## Lasso
@@ -148,7 +168,7 @@ ridge_resamples|>
 ### feature and target engineering
 
 ```{r}
-lasso_rec <- 
+lasso_v_rec <- 
   recipe(log_viol ~ .,
          data = crime_train) |>
   update_role(county,
@@ -162,48 +182,48 @@ lasso_rec <-
   step_normalize(all_predictors())
 
 # check if feature engineering works to remove variables
-lasso_summary<-summary(lasso_rec)
+lasso_v_summary<-summary(lasso_v_rec)
 
 # create a model
-lasso_mod <- 
+lasso_v_mod <- 
   linear_reg(penalty = tune(), mixture = 1) |>
   set_mode(mode = "regression") |>
   set_engine(engine = "glmnet")  
  
-lasso_grid <-
+lasso_v_grid <-
   grid_regular(penalty(),
                levels = 20)
 
-lasso_wf <-
+lasso_v_wf <-
   workflow() |>
-  add_recipe(recipe = lasso_rec) |>
-  add_model(spec = lasso_mod)
+  add_recipe(recipe = lasso_v_rec) |>
+  add_model(spec = lasso_v_mod)
 ```
 
 ### choose the best model
 
 ```{r}
 set.seed(904)
-lasso_resamples<- 
-  lasso_wf|>
+lasso_v_resamples<- 
+  lasso_v_wf|>
   tune_grid(
     resamples = crime_folds,
-    grid = lasso_grid,
+    grid = lasso_v_grid,
     metrics = metric_set(rmse)
     )
 
-lasso_resamples |>
+lasso_v_resamples |>
   collect_metrics()
   
-top_lasso_models <-
-  lasso_resamples |>
+top_lasso_v_models <-
+  lasso_v_resamples |>
   show_best() |>
   arrange(penalty) 
 
-lasso_resamples|>
+lasso_v_resamples|>
   select_best()
 
-lasso_resamples|>
+lasso_v_resamples|>
   autoplot()
 ```
 
@@ -212,18 +232,20 @@ lasso_resamples|>
 ### feature and target engineering
 
 ```{r}
-rf_rec <- 
-  recipe(log_viol ~ ., 
-         crime_train) |>
-   step_impute_median(all_predictors())|>
-   update_role(county, 
-               year, 
-               property, 
-               viol, 
-               log_property, 
-               new_role = "id") 
+rf_v_rec <- 
+  recipe(log_viol ~ .,
+         data = crime_train) |>
+  update_role(county,
+              year,
+              property,
+              viol,
+              log_property,
+              new_role = "id") |>
+  step_impute_median(all_predictors())|>
+  step_nzv(all_predictors())|>
+  step_normalize(all_predictors())
 
-rf_mod <- 
+rf_v_mod <- 
   rand_forest(
   mtry = tune(),
   min_n = tune(),
@@ -236,12 +258,12 @@ rf_mod <-
     num.threads = 4
   )
 
-rf_wf <- 
+rf_v_wf <- 
   workflow() |>
-  add_recipe(rf_rec) |>
-  add_model(rf_mod)
+  add_recipe(rf_v_rec) |>
+  add_model(rf_v_mod)
 
-rf_grid <- grid_regular(
+rf_v_grid <- grid_regular(
   mtry(range = c(1, 15)),
   min_n(range = c(1, 15)),
   levels = 5
@@ -252,33 +274,55 @@ rf_grid <- grid_regular(
 
 ```{r}
 set.seed(904)
-rf_resamples <- 
+rf_v_resamples <- 
   tune_grid(
-  rf_wf,
+  rf_v_wf,
   resamples = crime_folds,
-  grid = rf_grid)
+  grid = rf_v_grid)
 
-collect_metrics(rf_resamples)
+collect_metrics(rf_v_resamples)
 
-show_best(rf_resamples, 
+show_best(rf_v_resamples, 
           metric = "rmse") 
 
-select_best(rf_resamples)
-autoplot(rf_resamples)
+select_best(rf_v_resamples)
+autoplot(rf_v_resamples)
 ```
 
 ### Selecting the top 25 important variables
 
 ```{r}
-rf_final_wf <- 
-  rf_wf |> 
-  finalize_workflow(select_best(rf_resamples))
+rf_v_final_wf <- 
+  rf_v_wf |> 
+  finalize_workflow(select_best(rf_v_resamples))
 
-rf_fit <- 
-  rf_final_wf |>
+rf_v_fit <- 
+  rf_v_final_wf |>
   fit(data = crime_all_cleaned)
 
-rf_fit|>
+violent_labels <- c(
+  disadvantage2_13_17 = "Mean of pfhfam ppubas ppov punemp",
+  disadvantage13_17 = "Mean of pnhblack pfhfam ppubas ppov punemp",
+  pfhfam13_17 = "Prop. female-headed families w/ kids",
+  totpop13_17 = "Total population",
+  pnvmar13_17 = "Proportion 15+ Never Married",
+  ppov13_17 = "Proportion w/ income past 12 months below poverty level",
+  p18yr_13_17 = "Proportion under 18",
+  p30_3913_17 = "Proportion 30-39 year-old",
+  p18_2913_17 = "Proportion 18-29 year-old",
+  pin2b_13_17 = "Prop. of families with Income 15-30K",
+  pin3b_13_17 = "Prop. of families with Income 30-50K",
+  tot_pop_ruca = "Tract total population",
+  gamma = "GAMMA index",
+  punemp13_17 = "Proportion 16+ civ labor force unemployed",
+  ped1_13_17 = "Prop. w/ Less than High School Diploma",
+  ppubas13_17 = "Prop. of households with public assistance income",
+  connoderatio = "Connected node ratio",
+  linknoderatio = "Link node ratio",
+  urbanicity = "Three-category urbanicity variable"
+)
+
+rf_v_fit|>
   extract_fit_parsnip()|>
   vip(num_features = 20) %>%
   .$data |>
@@ -287,6 +331,8 @@ rf_fit|>
     Variable = fct_reorder(.x = Importance, .f = Variable)
   ) |>
   ggplot(aes(Importance, Variable)) +
+  scale_y_discrete(labels = violent_labels) +
+  labs(title = "Top 20 Important Variables for Violent Crime Prediction") +
   geom_col()
 
 # every variable ending with 13_17 are SES indicators
@@ -300,28 +346,654 @@ rf_fit|>
 
 ```{r}
 # build a linear regression recipe
-lm_rec <-
-  recipe(log_viol ~ ., 
+lm_v_rec <-
+  recipe(log_viol ~ .,
          data = crime_train) |>
-   step_impute_median(all_predictors())|>
-   update_role(county, year, property, viol, log_property, new_role = "id") 
+  update_role(county,
+              year,
+              property,
+              viol,
+              log_property,
+              new_role = "id") |>
+  step_impute_median(all_predictors())|>
+  step_nzv(all_predictors())|>
+  step_normalize(all_predictors())
 
-lm_mod <- linear_reg() |>
+lm_v_mod <- linear_reg() |>
   set_mode(mode = "regression") |>
   set_engine(engine = "lm")
 
-lm_wf <- workflow() |>
-  add_recipe(lm_rec) |>
-  add_model(lm_mod)
+lm_v_wf <- workflow() |>
+  add_recipe(lm_v_rec) |>
+  add_model(lm_v_mod)
 ```
 
 ### choose the best model
 
 ```{r}
 set.seed(904)
-lm_resamples <- lm_wf |>
+lm_v_resamples <- lm_v_wf |>
   fit_resamples(resamples = crime_folds)
 
-lm_resamples |>
+lm_v_resamples |>
   collect_metrics()
 ```
+
+## MARS
+
+### feature and target engineering
+
+```{r}
+# recipe
+mars_v_rec <- 
+  recipe(log_viol ~ .,
+         data = crime_train) |>
+  update_role(county,
+              year,
+              property,
+              viol,
+              log_property,
+              new_role = "id") |>
+  step_impute_median(all_predictors())|>
+  step_nzv(all_predictors())|>
+  step_normalize(all_predictors())
+
+mars_v_rec_sum<-summary(mars_v_rec)
+
+# model
+mars_v_mod <- 
+  mars(
+  num_terms = tune(), 
+  prod_degree = tune()
+) |>
+  set_mode(mode = "regression") |>
+  set_engine(engine = "earth")
+
+# tuning grid
+mars_v_grid <- 
+  grid_regular(
+  num_terms(range = c(10, 100)),
+  prod_degree(),
+  levels = 10
+)
+
+# workflow
+mars_v_wf <- 
+  workflow() |>
+  add_recipe(recipe = mars_v_rec) |>
+  add_model(spec = mars_v_mod)
+```
+
+### choose the best model
+
+```{r}
+# resample   
+set.seed(904)
+mars_v_resamples <- 
+  mars_v_wf|>
+  tune_grid(
+  resamples = crime_folds,
+  grid = mars_v_grid,
+  metrics = metric_set(rmse)
+  )
+
+collect_metrics(mars_v_resamples)
+
+top_mars_v_models <-
+  mars_v_resamples |>
+  show_best()
+
+mars_v_resamples|>
+  select_best()
+```
+
+## XG Boost
+
+## feature and target engineering
+
+```{r}
+xgb_v_rec <- 
+  recipe(log_viol ~ .,
+         data = crime_train) |>
+  update_role(county,
+              year,
+              property,
+              viol,
+              log_property,
+              new_role = "id") |>
+  step_impute_median(all_predictors())|>
+  step_nzv(all_predictors())|>
+  step_normalize(all_predictors())
+
+all_cores <- parallel::detectCores(logical = FALSE)
+
+registerDoFuture()
+
+cl <- makeCluster(all_cores - 3L)
+
+plan(cluster, workers = cl)
+
+xgb_v_spec <- boost_tree(
+  trees = 200,
+  tree_depth = tune(), 
+  min_n = tune(),
+  loss_reduction = tune(),                     
+  sample_size = tune(), 
+  mtry = tune(),         
+  learn_rate = tune()                   
+) |>
+  set_engine("xgboost") |>
+  set_mode("regression")
+
+
+set.seed(904)
+xgb_v_grid <- 
+  grid_latin_hypercube(
+  tree_depth(),
+  min_n(range = c(2, 10)),
+  loss_reduction(range = c(-5, -3)),
+  sample_size = sample_prop(),
+  mtry(range = c(1, 10)),
+  learn_rate(range = c(-5, -1)),
+  size = 30
+)
+
+xgb_v_wf <- workflow() |>
+  add_recipe(xgb_v_rec) |>
+  add_model(xgb_v_spec)
+```
+
+### choose the best model
+
+```{r}
+set.seed(904)
+xgb_v_resamples <- 
+  tune_grid(
+  xgb_v_wf,
+  resamples = crime_folds,
+  grid = xgb_v_grid)
+
+collect_metrics(xgb_v_resamples)
+show_best(xgb_v_resamples, metric = "rmse") 
+select_best(xgb_v_resamples, metric= "rmse")
+```
+
+## Final comparison of rmse
+
+```{r}
+bind_rows(
+  `Violent Crime Ridge regression` = collect_metrics(ridge_v_resamples) |>
+    filter(.metric == "rmse"),
+  `Violent Crime Lasso regression` = collect_metrics(lasso_v_resamples) |>
+    filter(.metric == "rmse"),
+  `Violent Crime Random Forest` = collect_metrics(rf_v_resamples) |>
+    filter(.metric == "rmse"),
+  `Violent Crime Linear Regression` = collect_metrics(lm_v_resamples) |>
+    filter(.metric == "rmse"),
+  `Violent Crime MARS` = collect_metrics(mars_v_resamples) |>
+    filter(.metric == "rmse"),  
+  `Violent Crime XG Boost`=collect_metrics(xgb_v_resamples) |>
+    filter(.metric == "rmse"),
+  .id = "model"
+) |>
+  arrange(mean)
+```
+Because XG Boost has the lowest RMSE value, we will use MARS as our final model for violent crime.
+
+## Prediction
+
+```{r}
+
+```
+
+# Property Crime
+
+## Ridge Regression
+
+### feature and target engineering
+
+```{r}
+# create a recipe
+ridge_p_rec <- 
+  recipe(log_property ~ .,
+         data = crime_train) |>
+  update_role(county,
+              year,
+              property,
+              viol,
+              log_viol,
+              new_role = "id") |>
+  step_impute_median(all_predictors())|>
+  step_nzv(all_predictors())|>
+  step_normalize(all_predictors())
+ 
+# check if feature engineering works to remove variables
+ridge_p_summary<-summary(ridge_p_rec)
+
+# model
+ridge_p_mod <- 
+  linear_reg(penalty = tune(), mixture = 0) |>
+  set_mode(mode = "regression") |>
+  set_engine(engine = "glmnet")  
+
+ridge_p_grid<-
+  grid_regular(penalty(),
+               levels = 20)
+# workflow
+ridge_p_wf <- 
+  workflow() |>
+  add_recipe(recipe = ridge_p_rec) |>
+  add_model(spec = ridge_p_mod)
+```
+
+### choose the best model
+
+```{r}
+ridge_p_resamples <-
+  ridge_p_wf |>
+  tune_grid(
+    resamples = crime_folds,
+    grid = ridge_p_grid,
+    metrics = metric_set(rmse)
+    )
+
+ridge_p_resamples |>
+  collect_metrics()
+
+top_ridge_p_models <-
+  ridge_p_resamples |>
+  show_best() |>
+  arrange(penalty) 
+
+ridge_p_resamples|>
+  select_best()
+
+ridge_p_resamples|>
+  autoplot()
+```
+
+## Lasso
+
+### feature and target engineering
+
+```{r}
+lasso_p_rec <- 
+  recipe(log_property ~ .,
+         data = crime_train) |>
+  update_role(county,
+              year,
+              property,
+              viol,
+              log_viol,
+              new_role = "id") |>
+  step_impute_median(all_predictors())|>
+  step_nzv(all_predictors())|>
+  step_normalize(all_predictors())
+
+# check if feature engineering works to remove variables
+lasso_p_summary<-summary(lasso_p_rec)
+
+# create a model
+lasso_p_mod <- 
+  linear_reg(penalty = tune(), mixture = 1) |>
+  set_mode(mode = "regression") |>
+  set_engine(engine = "glmnet")  
+ 
+lasso_p_grid <-
+  grid_regular(penalty(),
+               levels = 20)
+
+lasso_p_wf <-
+  workflow() |>
+  add_recipe(recipe = lasso_p_rec) |>
+  add_model(spec = lasso_p_mod)
+```
+
+### choose the best model
+
+```{r}
+set.seed(904)
+lasso_p_resamples<- 
+  lasso_p_wf|>
+  tune_grid(
+    resamples = crime_folds,
+    grid = lasso_p_grid,
+    metrics = metric_set(rmse)
+    )
+
+lasso_p_resamples |>
+  collect_metrics()
+  
+top_lasso_p_models <-
+  lasso_p_resamples |>
+  show_best() |>
+  arrange(penalty) 
+
+lasso_p_resamples|>
+  select_best()
+
+lasso_p_resamples|>
+  autoplot()
+```
+
+## Random Forest
+
+### feature and target engineering
+
+```{r}
+rf_p_rec <- 
+  recipe(log_property ~ .,
+         data = crime_train) |>
+  update_role(county,
+              year,
+              property,
+              viol,
+              log_viol,
+              new_role = "id") |>
+  step_impute_median(all_predictors())|>
+  step_nzv(all_predictors())|>
+  step_normalize(all_predictors())
+
+rf_p_mod <- 
+  rand_forest(
+  mtry = tune(),
+  min_n = tune(),
+  trees = 200
+  ) |>
+  set_mode(mode = "regression") |>
+  set_engine(
+    engine = "ranger", 
+    importance = "impurity",
+    num.threads = 4
+  )
+
+rf_p_wf <- 
+  workflow() |>
+  add_recipe(rf_p_rec) |>
+  add_model(rf_p_mod)
+
+rf_p_grid <- grid_regular(
+  mtry(range = c(1, 15)),
+  min_n(range = c(1, 15)),
+  levels = 5
+)
+```
+
+### choose the best model
+
+```{r}
+set.seed(904)
+rf_p_resamples <- 
+  tune_grid(
+  rf_p_wf,
+  resamples = crime_folds,
+  grid = rf_p_grid)
+
+collect_metrics(rf_p_resamples)
+
+show_best(rf_p_resamples, 
+          metric = "rmse") 
+
+select_best(rf_p_resamples)
+autoplot(rf_p_resamples)
+```
+
+### Selecting the top 25 important variables
+
+```{r}
+rf_p_final_wf <- 
+  rf_p_wf |> 
+  finalize_workflow(select_best(rf_p_resamples))
+
+rf_p_fit <- 
+  rf_p_final_wf |>
+  fit(data = crime_all_cleaned)
+
+property_labels <- c(
+  totpop13_17 = "Total population",
+  p30_3913_17 = "Proportion 30-39 year-old",
+  gamma = "Gamma index",
+  tot_pop_ruca = "Tract total population",
+  linknoderatio = "Link/node ratio",
+  p18yr_13_17 = "Proportion under 18",
+  pnvmar13_17 = "Proportion 15+ Never Married",
+  p18_2913_17 = "Proportion 18-29 year-old",
+  pfhfam13_17 = "Prop. female-headed families w/ kids",
+  pprof13_17 = "Prop. employd civ 16+ mgmt/bus/sci/arts",
+  connoderatio = "Connected node ratio",
+  urbanicity = "Three-category urbanicity variable",
+  pin3b_13_17 = "Prop. of families with Income 30-50K",
+  urban_pop = "Total urban population",
+  disadvantage2_13_17 = "Mean of pfhfam ppubas ppov punemp",
+  ped2_13_17 = "Prop. with High School Diploma and/or avove",
+  ppov13_17 = "Prop. w/ income past 12 months below poverty level",
+  year_intp = "NLCD year, interpolated",
+  pin2b_13_17 = "Prop. of families with Income 15-30K",
+  p40_4913_17 = "Proportion 40-49 year-old"
+)
+
+rf_p_fit|>
+  extract_fit_parsnip()|>
+  vip(num_features = 20) %>%
+  .$data |>
+  mutate(
+    Importance = Importance / max(Importance),
+    Variable = fct_reorder(.x = Importance, .f = Variable)
+  ) |>
+  ggplot(aes(Importance, Variable)) +
+  scale_y_discrete(labels = property_labels) +
+  labs(title = "Top 20 Important Variables for Property Crime Prediction") +
+  geom_col()
+
+# every variable ending with 13_17 are SES indicators
+# linknoderatio, conNodeRatio and gamma are street connectivity indicators
+# top_pop_ruca, urban_pop and urbanicity are in urbanicity indicators
+# year_intp is land cover indicator
+```
+
+## Linear Regression
+
+### feature and target engineering
+
+```{r}
+# build a linear regression recipe
+lm_p_rec <-
+  recipe(log_property ~ .,
+         data = crime_train) |>
+  update_role(county,
+              year,
+              property,
+              viol,
+              log_viol,
+              new_role = "id") |>
+  step_impute_median(all_predictors())|>
+  step_nzv(all_predictors())|>
+  step_normalize(all_predictors())
+
+lm_p_mod <- linear_reg() |>
+  set_mode(mode = "regression") |>
+  set_engine(engine = "lm")
+
+lm_p_wf <- workflow() |>
+  add_recipe(lm_p_rec) |>
+  add_model(lm_p_mod)
+```
+
+### choose the best model
+
+```{r}
+set.seed(904)
+lm_p_resamples <- lm_p_wf |>
+  fit_resamples(resamples = crime_folds)
+
+lm_p_resamples |>
+  collect_metrics()
+```
+
+## MARS
+
+### feature and target engineering
+
+```{r}
+# recipe
+mars_p_rec <- 
+  recipe(log_property ~ .,
+         data = crime_train) |>
+  update_role(county,
+              year,
+              property,
+              viol,
+              log_viol,
+              new_role = "id") |>
+  step_impute_median(all_predictors())|>
+  step_nzv(all_predictors())|>
+  step_normalize(all_predictors())
+
+mars_p_rec_sum<-summary(mars_p_rec)
+
+# model
+mars_p_mod <- 
+  mars(
+  num_terms = tune(), 
+  prod_degree = tune()
+) |>
+  set_mode(mode = "regression") |>
+  set_engine(engine = "earth")
+
+# tuning grid
+mars_p_grid <- 
+  grid_regular(
+  num_terms(range = c(10, 100)),
+  prod_degree(),
+  levels = 10
+)
+
+# workflow
+mars_p_wf <- 
+  workflow() |>
+  add_recipe(recipe = mars_p_rec) |>
+  add_model(spec = mars_p_mod)
+```
+
+### choose the best model
+
+```{r}
+# resample   
+set.seed(904)
+mars_p_resamples <- 
+  mars_p_wf|>
+  tune_grid(
+  resamples = crime_folds,
+  grid = mars_p_grid,
+  metrics = metric_set(rmse)
+  )
+
+collect_metrics(mars_p_resamples)
+
+top_mars_p_models <-
+  mars_p_resamples |>
+  show_best()
+
+mars_p_resamples|>
+  select_best()
+```
+
+## XG Boost
+
+## feature and target engineering
+
+```{r}
+xgb_p_rec <- 
+  recipe(log_property ~ .,
+         data = crime_train) |>
+  update_role(county,
+              year,
+              property,
+              viol,
+              log_viol,
+              new_role = "id") |>
+  step_impute_median(all_predictors())|>
+  step_nzv(all_predictors())|>
+  step_normalize(all_predictors())
+
+all_cores <- parallel::detectCores(logical = FALSE)
+
+registerDoFuture()
+
+cl <- makeCluster(all_cores - 3L)
+
+plan(cluster, workers = cl)
+
+xgb_p_spec <- boost_tree(
+  trees = 200,
+  tree_depth = tune(), 
+  min_n = tune(),
+  loss_reduction = tune(),                     
+  sample_size = tune(), 
+  mtry = tune(),         
+  learn_rate = tune()                   
+) |>
+  set_engine("xgboost") |>
+  set_mode("regression")
+
+
+set.seed(904)
+xgb_p_grid <- 
+  grid_latin_hypercube(
+  tree_depth(),
+  min_n(range = c(2, 10)),
+  loss_reduction(range = c(-5, -3)),
+  sample_size = sample_prop(),
+  mtry(range = c(1, 10)),
+  learn_rate(range = c(-5, -1)),
+  size = 30
+)
+
+xgb_p_wf <- workflow() |>
+  add_recipe(xgb_p_rec) |>
+  add_model(xgb_p_spec)
+```
+
+### choose the best model
+
+```{r}
+set.seed(904)
+xgb_p_resamples <- 
+  tune_grid(
+  xgb_p_wf,
+  resamples = crime_folds,
+  grid = xgb_p_grid)
+
+collect_metrics(xgb_p_resamples)
+show_best(xgb_p_resamples, metric = "rmse") 
+select_best(xgb_p_resamples, metric= "rmse")
+```
+
+## Final comparison of rmse
+
+```{r}
+bind_rows(
+  `Property Crime Ridge regression` = collect_metrics(ridge_p_resamples) |>
+    filter(.metric == "rmse"),
+  `Property Crime Lasso regression` = collect_metrics(lasso_p_resamples) |>
+    filter(.metric == "rmse"),
+  `Property Crime Random Forest` = collect_metrics(rf_p_resamples) |>
+    filter(.metric == "rmse"),
+  `Property Crime Linear Regression` = collect_metrics(lm_p_resamples) |>
+    filter(.metric == "rmse"),
+  `Property Crime MARS` = collect_metrics(mars_p_resamples) |>
+    filter(.metric == "rmse"),  
+  `Property Crime XG Boost`= collect_metrics(xgb_p_resamples) |>
+    filter(.metric == "rmse"),
+  .id = "model"
+) |>
+  arrange(mean)
+```
+Because XG Boost has the lowest RMSE value, we will use MARS as our final model for violent crime.
+
+## Prediction
+
+```{r}
+
+```
+
