@@ -7,37 +7,60 @@ execute:
   warning: false
 embed-resources: true
 ---
+
 ```{r load packages, echo=FALSE}
 library(tidyverse)
 library(tidymodels)
 library(ggplot2)
+library(parsnip)
+library(baguette)
+library(doFuture)
+library(doParallel)
+library(xgboost)
 library(vip)
+library(haven)
 ```
 
-# Data Cleaning
+# EDA and Data cleaning
 
 ```{r}
+# remove STATA attributes
 attr(crime_all$viol, "format.stata") <- NULL
 attr(crime_all$property, "format.stata") <- NULL
 
 attr(crime_all$viol, "label") <- NULL
 attr(crime_all$property, "label") <- NULL
+ 
+str(crime_all)
 
-crime_all <- crime_all[!is.na(crime_all$viol), ]
-crime_all <- crime_all[!is.na(crime_all$property), ]
+# generate log(violent crime) and log (property crime)
+crime_all_cleaned <- crime_all|>
+  # remove NA values in the outcome variables
+  filter(!is.na(viol) & !is.na(property))|>
+  mutate(log_viol=log(viol))|>
+  mutate(log_property=log(property))|>
+  filter(!(is.infinite(log_viol) | is.infinite(log_property)))|>
 
-crime_all$log_viol <- log(crime_all$viol)
-crime_all <- crime_all[crime_all$log_viol != -Inf, ]
+# explore missing values
+missing_values <- colSums(is.na(crime_all_cleaned))
 
-crime_all$log_property <- log(crime_all$property)
-crime_all <- crime_all[crime_all$log_property != -Inf, ]
+missing_values
+
+missing_values<-as.data.frame(missing_values)
+
+# look at the variables with the most missing values
+missing_values_percent<-missing_values|>
+  mutate(missing_percent = missing_values/nrow(crime_all_cleaned))|>
+  arrange(desc(missing_percent))|>
+  top_n(10)
 ```
 
-# Spliting Data
+
+# Splitting Data
 
 ```{r}
 set.seed(904)
-crime_split <- initial_split(crime_all, prop = 0.8)
+crime_split <- initial_split(crime_all_cleaned, prop = 0.8)
 
 crime_train <- training(crime_split)
 crime_test <- testing(crime_split)
@@ -51,51 +74,66 @@ crime_folds <- vfold_cv(data = crime_train, v = 5)
 ```
 
 # Violent Crime
+
 ## Ridge Regression
 
 ### feature and target engineering
 
 ```{r} 
-# recipe
-ridge_rec <- recipe(log_viol ~ ., 
-           data = crime_train) |>
-    step_impute_median(all_numeric_predictors())|>
-    update_role(county,
-                year,
-                property,
-                new_role = "id") |>
-  step_normalize(all_numeric_predictors())
-
-ridge_rec_summary<-summary(ridge_rec)
+# create a recipe
+ridge_rec <- 
+  recipe(log_viol ~ .,
+         data = crime_train) |>
+  update_role(county,
+              year,
+              property,
+              viol,
+              log_property,
+              new_role = "id") |>
+  step_impute_median(all_predictors())|>
+  step_nzv(all_predictors())|>
+  step_normalize(all_predictors())
+ 
+# check if feature engineering works to remove variables
+ridge_summary<-summary(ridge_rec)
 
 # model
 ridge_mod <- 
-  linear_reg(penalty = tune(), 
-             mixture = 0) |>
+  linear_reg(penalty = tune(), mixture = 0) |>
   set_mode(mode = "regression") |>
   set_engine(engine = "glmnet")  
-  
-ridge_grid <- 
-  grid_regular(penalty(), 
-               levels = 1)
-  
+
+# workflow
 ridge_wf <- 
   workflow() |>
   add_recipe(recipe = ridge_rec) |>
   add_model(spec = ridge_mod)
 ```
 
-### choose the best model
+## choose the best model
 
 ```{r}
 ridge_resamples <-
   ridge_wf |>
   tune_grid(
     resamples = crime_folds,
-    grid = ridge_grid
-  )
+    grid = 20,
+    metrics = metric_set(rmse)
+    )
 
-collect_metrics(ridge_resamples)
+ridge_resamples |>
+  collect_metrics()
+
+top_ridge_models <-
+  ridge_resamples |>
+  show_best() |>
+  arrange(penalty) 
+
+ridge_resamples|>
+  select_best()
+
+ridge_resamples|>
+  autoplot()
 ```
 
 ## Lasso
@@ -103,15 +141,18 @@ collect_metrics(ridge_resamples)
 ### feature and target engineering
 
 ```{r}
-lasso_rec <-
-    recipe(log_viol ~ ., 
-           data = crime_train) |>
-    step_impute_median(all_numeric_predictors())|>
-    update_role(county,
-                year,
-                property,
-                new_role = "id") |>
-  step_normalize(all_numeric_predictors())
+lasso_rec <- 
+  recipe(log_viol ~ .,
+         data = crime_train) |>
+  update_role(county,
+              year,
+              property,
+              viol,
+              log_property,
+              new_role = "id") |>
+  step_impute_median(all_predictors())|>
+  step_nzv(all_predictors())|>
+  step_normalize(all_predictors())
 
 # check if feature engineering works to remove variables
 lasso_summary<-summary(lasso_rec)
@@ -121,9 +162,6 @@ lasso_mod <-
   linear_reg(penalty = tune(), mixture = 1) |>
   set_mode(mode = "regression") |>
   set_engine(engine = "glmnet")  
-
-lasso_grid <-
-  tibble(penalty = 10^seq(-4, -1, length.out = 30))
  
 lasso_wf <-
   workflow() |>
@@ -139,7 +177,8 @@ lasso_resamples<-
   lasso_wf|>
   tune_grid(
     resamples = crime_folds,
-    grid = lasso_grid,
+    grid = 20,
+    metrics = metric_set(rmse)
     )
 
 lasso_resamples |>
@@ -166,10 +205,7 @@ rf_rec <-
   recipe(log_viol ~ ., 
          crime_train) |>
    step_impute_median(all_predictors())|>
-   update_role(county, 
-              year, 
-              property,
-              new_role = "id")
+   update_role(county, year, property, viol, log_property, new_role = "id") 
 
 rf_mod <- 
   rand_forest(
@@ -214,6 +250,24 @@ select_best(rf_resamples)
 autoplot(rf_resamples)
 ```
 
+### Selecting the top 25 important variables
+
+```{r}
+rf_fit <- rf_final_wf |>
+  fit(data = crime_train)
+
+rf_fit|>
+  extract_fit_parsnip()|>
+  vip(num_features = 20) %>%
+  .$data |>
+  mutate(
+    Importance = Importance / max(Importance),
+    Variable = fct_reorder(.x = Importance, .f = Variable)
+  ) |>
+  ggplot(aes(Importance, Variable)) +
+  geom_col()
+```
+
 ## Linear Regression
 
 ### feature and target engineering
@@ -224,10 +278,7 @@ lm_rec <-
   recipe(log_viol ~ ., 
          data = crime_train) |>
    step_impute_median(all_predictors())|>
-   update_role(county, 
-              year, 
-              property,
-              new_role = "id")
+   update_role(county, year, property, viol, log_property, new_role = "id") 
 
 lm_mod <- linear_reg() |>
   set_mode(mode = "regression") |>
@@ -248,4 +299,3 @@ lm_resamples <- lm_wf |>
 lm_resamples |>
   collect_metrics()
 ```
-
