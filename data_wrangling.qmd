@@ -8,7 +8,8 @@ execute:
 embed-resources: true
 ---
 
-```{r load libraries, echo=FALSE}
+# Load libraries and create directory for data download
+```{r, echo=FALSE}
 library(haven)
 library(here)
 library(tidyverse)
