@@ -21,10 +21,10 @@ library(vip)
 library(haven)
 ```
 
-# EDA
+# EDA and Data cleaning
 
 ```{r}
-# remove STATA attributes to make datas into a dataframe
+# remove STATA attributes
 attr(crime_all$viol, "format.stata") <- NULL
 attr(crime_all$property, "format.stata") <- NULL
 
@@ -33,12 +33,15 @@ attr(crime_all$property, "label") <- NULL
  
 str(crime_all)
 
+# generate log(violent crime) and log (property crime)
 crime_all_cleaned <- crime_all|>
-  mutate(logviol=log(viol))|>
-  mutate(logproperty=log(property))|>
-  filter(!(is.infinite(logviol) | is.infinite(logproperty)))|>
-  filter(!is.na(viol) & !is.na(property))
+  # remove NA values in the outcome variables
+  filter(!is.na(viol) & !is.na(property))|>
+  mutate(log_viol=log(viol))|>
+  mutate(log_property=log(property))|>
+  filter(!(is.infinite(log_viol) | is.infinite(log_property)))|>
 
+# explore missing values
 missing_values <- colSums(is.na(crime_all_cleaned))
 
 missing_values
@@ -52,7 +55,8 @@ missing_values_percent<-missing_values|>
   top_n(10)
 ```
 
-# Spliting Data
+
+# Splitting Data
 
 ```{r}
 set.seed(904)
@@ -60,7 +64,6 @@ crime_split <- initial_split(crime_all_cleaned, prop = 0.8)
 
 crime_train <- training(crime_split)
 crime_test <- testing(crime_split)
-glimpse(crime_train)
 ```
 
 # Cross-validation
@@ -70,20 +73,22 @@ set.seed(904)
 crime_folds <- vfold_cv(data = crime_train, v = 5)
 ```
 
-# Ridge Regression
+# Violent Crime
 
-## feature and target engineering
+## Ridge Regression
 
-```{r}
+### feature and target engineering
+
+```{r} 
 # create a recipe
 ridge_rec <- 
-  recipe(logviol ~ .,
+  recipe(log_viol ~ .,
          data = crime_train) |>
   update_role(county,
               year,
               property,
               viol,
-              logproperty,
+              log_property,
               new_role = "id") |>
   step_impute_median(all_predictors())|>
   step_nzv(all_predictors())|>
@@ -108,9 +113,8 @@ ridge_wf <-
 ## choose the best model
 
 ```{r}
-set.seed(904)
-ridge_resamples<- 
-  ridge_wf|>
+ridge_resamples <-
+  ridge_wf |>
   tune_grid(
     resamples = crime_folds,
     grid = 20,
@@ -132,19 +136,19 @@ ridge_resamples|>
   autoplot()
 ```
 
-# Lasso
+## Lasso
 
-## feature and target engineering
+### feature and target engineering
 
 ```{r}
 lasso_rec <- 
-  recipe(logviol ~ .,
+  recipe(log_viol ~ .,
          data = crime_train) |>
   update_role(county,
               year,
               property,
               viol,
-              logproperty,
+              log_property,
               new_role = "id") |>
   step_impute_median(all_predictors())|>
   step_nzv(all_predictors())|>
@@ -165,7 +169,7 @@ lasso_wf <-
   add_model(spec = lasso_mod)
 ```
 
-## choose the best model
+### choose the best model
 
 ```{r}
 set.seed(904)
@@ -174,7 +178,7 @@ lasso_resamples<-
   tune_grid(
     resamples = crime_folds,
     grid = 20,
-    metrics = metric_set(rsq)
+    metrics = metric_set(rmse)
     )
 
 lasso_resamples |>
@@ -192,19 +196,16 @@ lasso_resamples|>
   autoplot()
 ```
 
-# Random Forest
+## Random Forest
 
-## feature and target engineering
+### feature and target engineering
 
 ```{r}
 rf_rec <- 
-  recipe(viol ~ ., crime_train) |>
+  recipe(log_viol ~ ., 
+         crime_train) |>
    step_impute_median(all_predictors())|>
-   update_role(county, 
-              year, 
-              new_role = "id")
-
-rf_rec_summary<-summary(rf_rec)
+   update_role(county, year, property, viol, log_property, new_role = "id") 
 
 rf_mod <- 
   rand_forest(
@@ -230,7 +231,7 @@ rf_grid <- grid_regular(
 )
 ```
 
-## choose the best model
+### choose the best model
 
 ```{r}
 set.seed(904)
@@ -249,10 +250,9 @@ select_best(rf_resamples)
 autoplot(rf_resamples)
 ```
 
-## variable importance
+### Selecting the top 25 important variables
 
 ```{r}
-# Selecting the top 25 important variables
 rf_fit <- rf_final_wf |>
   fit(data = crime_train)
 
@@ -266,4 +266,36 @@ rf_fit|>
   ) |>
   ggplot(aes(Importance, Variable)) +
   geom_col()
+```
+
+## Linear Regression
+
+### feature and target engineering
+
+```{r}
+# build a linear regression recipe
+lm_rec <-
+  recipe(log_viol ~ ., 
+         data = crime_train) |>
+   step_impute_median(all_predictors())|>
+   update_role(county, year, property, viol, log_property, new_role = "id") 
+
+lm_mod <- linear_reg() |>
+  set_mode(mode = "regression") |>
+  set_engine(engine = "lm")
+
+lm_wf <- workflow() |>
+  add_recipe(lm_rec) |>
+  add_model(lm_mod)
+```
+
+### choose the best model
+
+```{r}
+set.seed(904)
+lm_resamples <- lm_wf |>
+  fit_resamples(resamples = crime_folds)
+
+lm_resamples |>
+  collect_metrics()
 ```
