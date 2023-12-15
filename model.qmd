@@ -7,10 +7,49 @@ execute:
   warning: false
 embed-resources: true
 ---
+
 ```{r load packages, echo=FALSE}
 library(tidyverse)
 library(tidymodels)
 library(ggplot2)
+library(parsnip)
+library(baguette)
+library(doFuture)
+library(doParallel)
+library(xgboost)
+library(vip)
+library(haven)
+```
+
+# EDA
+
+```{r}
+# remove STATA attributes to make datas into a dataframe
+attr(crime_all$viol, "format.stata") <- NULL
+attr(crime_all$property, "format.stata") <- NULL
+
+attr(crime_all$viol, "label") <- NULL
+attr(crime_all$property, "label") <- NULL
+ 
+str(crime_all)
+
+crime_all_cleaned <- crime_all|>
+  mutate(logviol=log(viol))|>
+  mutate(logproperty=log(property))|>
+  filter(!(is.infinite(logviol) | is.infinite(logproperty)))|>
+  filter(!is.na(viol) & !is.na(property))
+
+missing_values <- colSums(is.na(crime_all_cleaned))
+
+missing_values
+
+missing_values<-as.data.frame(missing_values)
+
+# look at the variables with the most missing values
+missing_values_percent<-missing_values|>
+  mutate(missing_percent = missing_values/nrow(crime_all_cleaned))|>
+  arrange(desc(missing_percent))|>
+  top_n(10)
 ```
 
 # Spliting Data
@@ -21,6 +60,7 @@ crime_split <- initial_split(crime_all_cleaned, prop = 0.8)
 
 crime_train <- training(crime_split)
 crime_test <- testing(crime_split)
+glimpse(crime_train)
 ```
 
 # Cross-validation
@@ -35,108 +75,34 @@ crime_folds <- vfold_cv(data = crime_train, v = 5)
 ## feature and target engineering
 
 ```{r}
-fit_ridge <- function(data, penalty) {
-  
-  # create a recipe
-  ridge_rec <- 
-    recipe(viol ~ ., data = crime_train) |>
-    step_impute_median(all_predictors())|>
-    update_role(county, 
-              year, 
-              new_role = "id") |>
-    step_normalize(all_predictors())
-  
-  # model
-  ridge_mod <- 
-    linear_reg(penalty = penalty, mixture = 0) |>
-    set_mode(mode = "regression") |>
-    set_engine(engine = "glmnet")  
-  
-  ridge_wf <- workflow() |>
-    add_recipe(recipe = ridge_rec) |>
-    add_model(spec = ridge_mod)
-  
-  ridge_wf |>
-    fit(data = crime_train) |>
-    extract_fit_parsnip() |>
-    tidy() |>
-    mutate(penalty = penalty)
-
-}
-```
-
-
-```{r}
-ridge_fit <- seq(0, 50, 1) |>
-  map_dfr(.f = ~ fit_ridge(crime_train, .x))
-```
-
-
-```{r}
-ggplot() +
-  geom_line(
-    data = filter(ridge_fit, term != "(Intercept)"),
-    mapping = aes(penalty, estimate, group = term),
-    alpha = 0.4
-  ) +
-  geom_point(
-    data = filter(ridge_fit, term != "(Intercept)", penalty == 0),
-    mapping = aes(penalty, estimate),
-    color = "red"
-  )
-```
-
-## ridge new
-```{r}
 # create a recipe
 ridge_rec <- 
-  recipe(viol ~ ., data = crime_train) |>
-  update_role(county, 
-              year, 
+  recipe(logviol ~ .,
+         data = crime_train) |>
+  update_role(county,
+              year,
+              property,
+              viol,
+              logproperty,
               new_role = "id") |>
-  step_impute_mean(all_predictors())|>
-  step_normalize(all_predictors()) |>
-  step_dummy(all_nominal_predictors())
-
-# tuning grid
-ridge_grid <- 
-  grid_regular(penalty(range = c(0.001, 10)), levels = 20)
+  step_impute_median(all_predictors())|>
+  step_nzv(all_predictors())|>
+  step_normalize(all_predictors())
+ 
+# check if feature engineering works to remove variables
+ridge_summary<-summary(ridge_rec)
 
 # model
 ridge_mod <- 
-  linear_reg(penalty = penalty, 
-             mixture = 0) |>
+  linear_reg(penalty = tune(), mixture = 0) |>
   set_mode(mode = "regression") |>
-  set_engine(engine = "glmnet") |>
-  set_args(penalty = tune())
+  set_engine(engine = "glmnet")  
 
 # workflow
-ridge_wf <- workflow() |>
+ridge_wf <- 
+  workflow() |>
   add_recipe(recipe = ridge_rec) |>
   add_model(spec = ridge_mod)
-```
-
-```{r}
-tune_results <- tune_grid(
-  object = ridge_wf,
-  resamples = crime_folds,
-  grid = ridge_grid,
-  metrics = metric_set(rmse)
-)
-
-best_penalty <- select_best(tune_results, "rmse")
-
-final_ridge_mod <- linear_reg(penalty = best_penalty$penalty, mixture = 0) %>%
-  set_mode("regression") %>%
-  set_engine("glmnet")
-
-final_ridge_wf <- workflow() %>%
-  add_recipe(ridge_rec) %>%
-  add_model(final_ridge_mod)
-
-final_fit <- final_ridge_wf %>%
-  fit(data = crime_train)
-
 ```
 
 ## choose the best model
@@ -147,12 +113,13 @@ ridge_resamples<-
   ridge_wf|>
   tune_grid(
     resamples = crime_folds,
-    grid = ridge_grid,
+    grid = 20,
     metrics = metric_set(rmse)
     )
 
-collect_metrics(ridge_resamples)
-  
+ridge_resamples |>
+  collect_metrics()
+
 top_ridge_models <-
   ridge_resamples |>
   show_best() |>
@@ -160,6 +127,9 @@ top_ridge_models <-
 
 ridge_resamples|>
   select_best()
+
+ridge_resamples|>
+  autoplot()
 ```
 
 # Lasso
@@ -167,13 +137,18 @@ ridge_resamples|>
 ## feature and target engineering
 
 ```{r}
-lasso_rec <-
-    recipe(viol ~ ., data = crime_train) |>
-    step_impute_median(all_predictors())|>
-    update_role(county, 
-              year, 
+lasso_rec <- 
+  recipe(logviol ~ .,
+         data = crime_train) |>
+  update_role(county,
+              year,
+              property,
+              viol,
+              logproperty,
               new_role = "id") |>
-    step_normalize(all_predictors()) 
+  step_impute_median(all_predictors())|>
+  step_nzv(all_predictors())|>
+  step_normalize(all_predictors())
 
 # check if feature engineering works to remove variables
 lasso_summary<-summary(lasso_rec)
@@ -183,9 +158,6 @@ lasso_mod <-
   linear_reg(penalty = tune(), mixture = 1) |>
   set_mode(mode = "regression") |>
   set_engine(engine = "glmnet")  
-
-lasso_grid <-
-  tibble(penalty = 10^seq(-4, -1, length.out = 30))
  
 lasso_wf <-
   workflow() |>
@@ -201,8 +173,8 @@ lasso_resamples<-
   lasso_wf|>
   tune_grid(
     resamples = crime_folds,
-    grid = lasso_grid,
-    metrics = metric_set(rmse)
+    grid = 20,
+    metrics = metric_set(rsq)
     )
 
 lasso_resamples |>
