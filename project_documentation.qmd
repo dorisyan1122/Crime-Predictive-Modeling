@@ -1,5 +1,5 @@
 ---
-title: "Project Documentation"
+title: "Project Writeup"
 author: "Ziwen Lu, Xuyan Xiu, Doris Yan"
 format: html
 editor: visual
@@ -19,7 +19,7 @@ Previous research support our choice of covariates. There is significant decline
 
 # Method
 
-Inspired by @goin2018, we use a machine-learning methodology to build a predictive model of crimes. Using the [National Neighborhood Data Archive (NaNDA)](https://www.icpsr.umich.edu/web/ICPSR/series/1920), we have county-level crime rate as the outcome variable, [socioeconomic status](https://www.icpsr.umich.edu/web/ICPSR/studies/38528), and urban planning features ([street connectivity](https://www.icpsr.umich.edu/web/ICPSR/studies/38580), [school counts](https://www.icpsr.umich.edu/web/ICPSR/studies/38569), [land cover](https://www.icpsr.umich.edu/web/ICPSR/studies/38598), and [pollution sites](https://www.icpsr.umich.edu/web/ICPSR/studies/38597)) as predictor variables. All of NaNDA datasets we use are available on Inter-university Consortium for Political and Social Research (ICPSR). We use regularized regression models including ridge and LASSO regression, tree-based models for model building and compare the predicted crime number with the actual crime number in the United States.
+Inspired by @goin2018, we use a machine-learning methodology to build a predictive model of crimes. Using the [National Neighborhood Data Archive (NaNDA)](https://www.icpsr.umich.edu/web/ICPSR/series/1920), we have county-level crime rate as the outcome variable, [socioeconomic status](https://www.icpsr.umich.edu/web/ICPSR/studies/38528), and urban planning features ([street connectivity](https://www.icpsr.umich.edu/web/ICPSR/studies/38580), [school counts](https://www.icpsr.umich.edu/web/ICPSR/studies/38569), [land cover](https://www.icpsr.umich.edu/web/ICPSR/studies/38598), and [pollution sites](https://www.icpsr.umich.edu/web/ICPSR/studies/38597)) as predictor variables. All of NaNDA datasets we use are available on Inter-university Consortium for Political and Social Research (ICPSR). We use regularized regression models including ridge and LASSO regression, tree-based models for model building and compare the predicted crime number with the actual crime number in the United States in 2016.
 
 ## Data Retrieval
 
@@ -33,31 +33,37 @@ We preformed several steps to clean our data. The unit of analysis in the crime 
 
 We limit our modeling data to year 2010. [Crime data](https://www.icpsr.umich.edu/web/ICPSR/studies/38649) is from FBI's uniform crime reporting program data for 2010. The socioeconomic status data are from ACS 5-years estimate for 2008 to 2012. Street connectivity, school counts, land cover, and pollution sites are from the 2010 census tract data.
 
+Since the data are high dimensional, we decided to use regularized regression models and the tree-based models for our predictive model. We build five models for each type of crime. The five models we used are Ridge regression, Lasso regression, Random Forest, XG Boost, and MARS.
+
+For all five models, we replaced missing values in all predictor variables with the median of the respective variables using `step_impute_median` and remove the predictor variables with zero variance using `step_nzv`. We only normalize our regularized regression models (Ridge and Lasso) using `step_normalize` because they are more sensitive to the scale of predictor variables.
+
 ## Prediction
 
 We want to predict crime in the US in 2016 using the socioeconomic and urban planning indicators and compare our result with the actual crime data from the FBI. [Crime data](https://www.icpsr.umich.edu/web/NACJD/studies/37059) used for comparison is from FBI's uniform crime reporting program data for 2016. The socioeconomic indicators are from ACS 5-years estimate for 2013 to 2017. School count, land cover, and pollution are from the 2016 census tract data. Since we only have data for street connectivity in 2010 and 2020, we thus use the data in 2020 to make the prediction.
 
 ## Metric Selection
 
-Our 2010 data showed that violent crime rate ranges from 0 to xxx, and property crime rate ranges from 0 to xxx. Given the large variation in crime rate, we performed a log-transformation for crime rate to reduce the variability of data. Moreover, since we want to make predictions and see how well our model perfome, we decided to use RMSE as our metric.
+Our 2010 data showed that violent crime rate ranges from 9 to 2361, and property crime rate ranges from 31 to 8853. Given the large variation in crime rate, we performed a log-transformation for crime rate to reduce the variability of data. Moreover, since we want to make predictions and see how well our model perform, we decided to use RMSE as our metric.
 
 # Result
 
-## Important Variable
+## Important Variables
 
-Based on the result from random forest model, the top 15 important variables for predicting violent crime are below. Most of the variables are from the socioeconomic data and few are from the land cover data.
+Based on the result from our random forest model, most of the important variables for predicting violent and property crime come from the socioeconomic data and few are from the land cover data.
 
-*Disadvantage1* is the mean of proportion of people Non-Hispanic Black, proportion female-headed families with kids, proportion of households with public assistance income, proportion people with income past 12 months below poverty level, and proportion 16+ civilian labor force unemployed.
+For violent crime, the top three important variables are *proportion of people non-Hispanic Black*, *Disadvantage 1*, and *proportion of families with Income less than 15K.*
 
-*Disadvantage2* is the mean of proportion female-headed families with kids, proportion of households with public assistance income, proportion people with income past 12 months below poverty level, and proportion 16+ civilian labor force unemployed.
+For property crime, the top three important variables are *Disadvantage1, Proportion of female-headed families with kids,* and *Disadvantage2.*
 
-Based on the result from random forest model, the top 15 important variables for predicting property crime are below. Most of the variables are from the socioeconomic data and few are from the land cover data.
+Disadvantage1 is the mean of proportion of people Non-Hispanic Black, proportion female-headed families with kids, proportion of households with public assistance income, proportion people with income past 12 months below poverty level, and proportion 16+ civilian labor force unemployed.
+
+Disadvantage2 is the mean of proportion female-headed families with kids, proportion of households with public assistance income, proportion people with income past 12 months below poverty level, and proportion 16+ civilian labor force unemployed.
 
 ## Model Performance
 
-For violent crime prediction, xx has the lowest RMSE. Thus we will use this model to predict the violent crime rate in 2016.
+For violent crime prediction, XG Boost has the lowest RMSE. Thus we used this model to predict the violent crime rate in 2016. Our final model fore predicting violent crime rate in 2016 has a RMSE of 0.593.
 
-For property crime prediction, xx has the lowest RMSE. Thus we will use this model to predict the property crime rate in 2016.
+For property crime prediction, Random Forest has the lowest RMSE. Thus we used this model to predict the property crime rate in 2016. Our final model fore predicting property crime rate in 2016 has a RMSE of 0.459.
 
 # Discussion
 
