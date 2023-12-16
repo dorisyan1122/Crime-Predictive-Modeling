@@ -6,5 +6,5 @@ Ziwen Lu, Xuyan Xiu, Doris Yan's final project
 
 [Project code](https://dorisyan1122.github.io/PPOL6819-Final-Project/final-project) 
 
-[Slides](https://dorisyan1122.github.io/PPOL6819-Final-Project/project_slides) 
+[Slides](https://dorisyan1122.github.io/PPOL6819-Final-Project/project-slides) 
 
