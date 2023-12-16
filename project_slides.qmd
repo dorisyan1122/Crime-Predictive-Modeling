@@ -1,5 +1,5 @@
 ---
-title: "Crime in the US"
+title: "Crime Rate in the United States"
 author: "Ziwen Lu, Ivy Xiu, Doris Yan"
 format: revealjs
 editor: visual
@@ -16,26 +16,26 @@ dir.create("data")
 
 ```{r echo=FALSE, include=FALSE, warning=FALSE, message=FALSE}
 
-# Load data
+# crime map data
+crime_09_14 <- read_dta(here("data","ICPSR_38649", "DS0001", "38649-0001-Data.dta"))
 
-options("icpsr_email" = "dy212@georgetown.edu", "icpsr_password" = "Fbp9nbmKreLsubd8nL5H")
+## data cleaning
 
-icpsr_download(
-  file_id = 38649,
-  download_dir = here("data")
-)
-
-crime<-read_dta(here("data","ICPSR_38649","DS0001","38649-0001-Data.dta"))
-
-crime_data<-crime|>
+crime_09_14 <- crime_09_14|>
   rename_all(tolower)|>
   rename(county=stcofips)|>
-  select(county,year,viol,property)
+  mutate(viol = murder+rape+robbery+agasslt)|>
+  mutate(property = burglry+larceny+mvtheft)|>
+  
+  select(county, year, viol, property, cpopcrim) |>
+  mutate(viol_rate = (viol / cpopcrim) * 100000) |>
+  mutate(property_rate = (property / cpopcrim) * 100000) |>
+  
+  filter(!is.na(viol_rate) | !is.na(property_rate)) |>
+  filter(!(is.infinite(viol_rate) | is.infinite(property_rate)))
 
-# Extract state-level FIPS codes (first two digits of county FIPS codes)
-
-crime_data$state_fips <- 
-  substr(crime_data$county, 
+crime_09_14$state_fips <- 
+  substr(crime_09_14$county, 
          1, 2)
 
 state_fips_to_abb <- 
@@ -63,13 +63,11 @@ state_fips_to_abb <-
 
 # Convert county-level data to state-level data, aggregate violent crime data
 
-crime_data_map <- crime_data |>
+crime_data_map <- crime_09_14 |>
   group_by(state_fips) |>
   summarise(
-    total_violence = sum(viol, 
-                         na.rm = TRUE),
-    total_property = sum(property, 
-                         na.rm = TRUE)  
+    avg_viol_rate = mean(viol_rate, na.rm = TRUE),
+    avg_property_rate = mean(property_rate, na.rm = TRUE)
   ) |>
   
   left_join(state_fips_to_abb, 
@@ -78,26 +76,27 @@ crime_data_map <- crime_data |>
   mutate(
     hover_violence = paste(state_abb, 
                            '<br>', 
-                           "Total Violent Crimes: ", 
-                           total_violence),
+                           "Violent Crimes Rate: ", 
+                           round(avg_viol_rate, 2)),
     hover_property = paste(state_abb, 
                            '<br>', 
-                           "Total Property Crimes: ", 
-                           total_property)  
+                           "Property Crimes Rate: ", 
+                           round(avg_property_rate, 2))  
   ) |>
   
   pivot_longer(
-    cols = c(total_violence, 
-             total_property),
+    cols = c(avg_viol_rate, 
+             avg_property_rate),
     names_to = "crime_type",
     values_to = "crime_count"
   )
 
-# Create and output the map for total violence
+
+# Create and output the map for violent crime
 
 violence_map <- 
   plot_geo(crime_data_map |>
-             filter(crime_type == "total_violence"),
+             filter(crime_type == "avg_viol_rate"),
            locationmode = 'USA-states') |>
   
   add_trace(
@@ -106,12 +105,15 @@ violence_map <-
     hoverinfo = 'text',     
     locations = ~state_abb,
     color = ~crime_count,
+    zmin = 0, 
+    zmax = 1000,
     colors = c("#1a9641", "#ffffbf", "#fdae61", "#d7191c"),
-    colorbar = list(title = "Total Violent Crimes (million)")
+    colorbar = list(title = "Violent Crimes Rate",
+                    tickvals = c(250, 500, 750))
   ) |>
   
   layout(
-    title = 'US Crimes by State, 2009 - 2014',
+    title = 'US Crimes Rate by State, 2009 - 2014',
     geo = list(
       scope = 'usa',
       projection = list(type = 'albers usa'),
@@ -120,11 +122,11 @@ violence_map <-
     )
   )
 
-# Create and output the map for total property
+# Create and output the map for property crime rate
 
 property_map <- 
   plot_geo(crime_data_map |>
-             filter(crime_type == "total_property"),
+             filter(crime_type == "avg_property_rate"),
            locationmode = 'USA-states') |>
   
   add_trace(
@@ -133,12 +135,15 @@ property_map <-
     hoverinfo = 'text',       
     locations = ~state_abb,
     color = ~crime_count,
+    zmin = 0, 
+    zmax = 5000,
     colors = c("#2b83ba", "#ffffbf", "#fdae61", "#d7191c"),
-    colorbar = list(title = "Total Property Crimes (million)")
+    colorbar = list(title = "Property Crimes Rate",
+                    tickvals = c(1000, 2000, 3000, 4000))
   ) |>
   
   layout(
-    title = 'US Crimes by State, 2009 - 2014',
+    title = 'US Crimes Rate by State, 2009 - 2014',
     geo = list(
       scope = 'usa',
       projection = list(type = 'albers usa'),
@@ -151,13 +156,38 @@ property_map <-
 fig <- subplot(violence_map, 
                property_map, 
                nrows = 2, 
-               margin = 0.05)
+               margin = 0.05) 
+
 ```
 
-## US Crimes by State, 2009 - 2014
+## US Crime Rate by State, 2009 - 2014 {.bigger}
 
 ```{r plot-slide, echo=FALSE, message=FALSE, warning=FALSE}
 fig
 ```
 
+## Prediciting Crime Rate in the U.S. in 2016 {.smaller}
 
+- Inspired by [Rudolph, and Ahern (2018)]( https://doi.org/10.1016/j.healthplace.2018.02.013), we want to use socioeconomic status indicators and urban planning indicators to predict violent and property crime rate in the U.S. in 2016
+
+- Data from [National Neighborhood Data Archive (NaNDA)](https://www.icpsr.umich.edu/web/ICPSR/series/1920)
+  - Outcome Variable: crime rate (2010 for predictive and 2016 for implementation)
+  - Predictor Variables: socioeconomic status and urban planning features (street connectivity, school
+  counts, land cover, and pollution sites)
+
+- Method
+  - 1). Data wrangling 
+  - 2). Predictive model building: Ridge regression, Lasso regression, Random Forest, XG Boost, and MARS
+  - 3). Use the best model to predict crime rate in 2016 and compare with the actual crime rate
+
+## Results {.smaller}
+
+- Violent Crime 
+  - XG Boost has the lowest RMSE (0.673). 
+  - Use XG boost to predict crime rate in 2016 and compare: RMSE of 0.593.
+  - Top three important variables are *proportion of people non-Hispanic Black*, *Disadvantage 1*, and *proportion of families with Income less than 15K.*
+
+- Property Crime 
+  - Random Forest has the lowest RMSE (0.474). 
+  - Use XG boost to predict crime rate in 2016 and compare: RMSE of 0.459.
+  - Top three important variables are *Disadvantage1, Proportion of female-headed families with kids,* and *Disadvantage2.*
