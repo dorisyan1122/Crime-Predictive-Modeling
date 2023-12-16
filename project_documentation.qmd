@@ -15,11 +15,11 @@ Crime is a significant concern in public policy since crime directly affects ind
 
 We are interested in learning about urban planning factors that predict crime rate. @goin2018 studied the predictors of firearm violence in California with a machine-learning approach. The covariates they use include ACS 5-year estimates of ZCTA-level community characteristics, alcohol outlet density, and climate. With a similar machine-learning methodology to study crimes, we will expand their scope by (1) covering a wider variety of crimes that include both property and violent crimes, (2) using county-level data from the entire U.S. (3) focusing on the socioeconomic status factors as well as the urban planning factors that predict crime.
 
-Previous research support our choice of covariates. There is significant decline in crime following school closure in Philadelphia. The reduction in crime, mainly driven by the reduction in violent crime, is concentrated in places where high schools are closed [@steinberg2019]. Residential blocks with more schools have a significantly higher number of felonious and motor vehicle thefts (i.e., property crimes) [@murray2013]. Park also has a huge impact on crime in that there is high density of violent, property, and disorder crimes in the park.The further away from parks, the lower the crime [@groff2012]. In terms of traffic and land, there is significant relationship between traffic congestion and domestic violence. Extreme traffic increases the incidence of domestic violence by 9% in Los Angeles [@beland2018]. Environmental factors likewise have an effect on crime. Increased pollution has a positive effect on violent crimes in the United States. A 10% reduction in daily PM2.5 and ozone could save \$1.4 billion in crime costs per year [@burkhardt2019]. In contrast, the amount and access to green space in the urban environment has a mitigating impact on violent crime [@shepley2019]. The results are important for urban crime prevention, considering that there are more crimes in the cities than in rural areas, according to National Crime Victimization Survey in 2021.
+Previous research support our choice of covariates. There is significant decline in crime following school closure in Philadelphia. The reduction in crime, mainly driven by the reduction in violent crime, is concentrated in places where high schools are closed [@steinberg2019]. Residential blocks with more schools have a significantly higher number of felonious and motor vehicle thefts (i.e., property crimes) [@murray2013]. In terms of traffic and land, there is significant relationship between traffic congestion and domestic violence. Extreme traffic increases the incidence of domestic violence by 9% in Los Angeles [@beland2018]. Environmental factors likewise have an effect on crime. Increased pollution has a positive effect on violent crimes in the United States. A 10% reduction in daily PM2.5 and ozone could save \$1.4 billion in crime costs per year [@burkhardt2019]. In contrast, the amount and access to green space in the urban environment has a mitigating impact on violent crime [@shepley2019]. The results are important for urban crime prevention, considering that there are more crimes in the cities than in rural areas, according to National Crime Victimization Survey in 2021.
 
 # Method
 
-Inspired by @goin2018, we use a machine-learning methodology to build a predictive model of crimes. Using the National Neighborhood Data Archive (NaNDA), we have county-level crime rate as the outcome variable, socioeconomic status, and urban planning features (school counts, street connectivity, urbanicity, land cover, road system, the number of parks and pollution sites) as predictor variables. All of NaNDA datasets we use are available on Inter-university Consortium for Political and Social Research (ICPSR). We use regularized regression models including ridge and LASSO regression, tree-based models for model building and compare the predicted crime number with the actual crime number in the United States.
+Inspired by @goin2018, we use a machine-learning methodology to build a predictive model of crimes. Using the [National Neighborhood Data Archive (NaNDA)](https://www.icpsr.umich.edu/web/ICPSR/series/1920), we have county-level crime rate as the outcome variable, [socioeconomic status](https://www.icpsr.umich.edu/web/ICPSR/studies/38528), and urban planning features ([street connectivity](https://www.icpsr.umich.edu/web/ICPSR/studies/38580), [school counts](https://www.icpsr.umich.edu/web/ICPSR/studies/38569), [land cover](https://www.icpsr.umich.edu/web/ICPSR/studies/38598), and [pollution sites](https://www.icpsr.umich.edu/web/ICPSR/studies/38597)) as predictor variables. All of NaNDA datasets we use are available on Inter-university Consortium for Political and Social Research (ICPSR). We use regularized regression models including ridge and LASSO regression, tree-based models for model building and compare the predicted crime number with the actual crime number in the United States.
 
 ## Data Retrieval
 
@@ -27,7 +27,37 @@ To make our analysis reproducible, we use the function `icpsr_download` to downl
 
 ## Data Cleaning
 
-We limit our modeling data to year 2013. The socioeconomic indicators are from ACS 5-years estimate for 2013 to 2017. The number of parks, street connectivity, urbanicity, road system are form the 2010 decennial
+We preformed several steps to clean our data. The unit of analysis in the crime data is county, identified by the 5-digit FIPS county code, whereas the unit of analysis for all predictors are is sub-county area, identified by 11-digit Census Tract FIPS code. Thus, for the socioeconomic status and urban planning data, we first added the sub-county area with the same first 5-digit FIPS code together. Then, we merged the socioeconomic status and urban planning data with the crime data by the common 5-digit FIPS code. We also removed variables that have the the same estimate. For example, crime and socioeconomic data all have variables for population, however, since we are predicting crime, it would be more appropriate to use the population variable in the crime data, thus we drop the population variable in the socioeconomic data. We also want drop the value with more than 50% missing values, but after exploring the data, we found no variable with more than 50% missing values. Lastly, we think it would be more appropriate to measure crime rate instead of the number of crime in each county because a county with more population would have more crimes. Thus, we generate a new variable for crime rate, which is the number of crime per 100,000 people.
+
+## Model Building
+
+We limit our modeling data to year 2010. [Crime data](https://www.icpsr.umich.edu/web/ICPSR/studies/38649) is from FBI's uniform crime reporting program data for 2010. The socioeconomic status data are from ACS 5-years estimate for 2008 to 2012. Street connectivity, school counts, land cover, and pollution sites are from the 2010 census tract data.
+
+## Prediction
+
+We want to predict crime in the US in 2016 using the socioeconomic and urban planning indicators and compare our result with the actual crime data from the FBI. [Crime data](https://www.icpsr.umich.edu/web/NACJD/studies/37059) used for comparison is from FBI's uniform crime reporting program data for 2016. The socioeconomic indicators are from ACS 5-years estimate for 2013 to 2017. School count, land cover, and pollution are from the 2016 census tract data. Since we only have data for street connectivity in 2010 and 2020, we thus use the data in 2020 to make the prediction.
+
+## Metric Selection
+
+Our 2010 data showed that violent crime rate ranges from 0 to xxx, and property crime rate ranges from 0 to xxx. Given the large variation in crime rate, we performed a log-transformation for crime rate to reduce the variability of data. Moreover, since we want to make predictions and see how well our model perfome, we decided to use RMSE as our metric.
+
+# Result
+
+## Important Variable
+
+Based on the result from random forest model, the top 15 important variables for predicting violent crime are below. Most of the variables are from the socioeconomic data and few are from the land cover data.
+
+*Disadvantage1* is the mean of proportion of people Non-Hispanic Black, proportion female-headed families with kids, proportion of households with public assistance income, proportion people with income past 12 months below poverty level, and proportion 16+ civilian labor force unemployed.
+
+*Disadvantage2* is the mean of proportion female-headed families with kids, proportion of households with public assistance income, proportion people with income past 12 months below poverty level, and proportion 16+ civilian labor force unemployed.
+
+Based on the result from random forest model, the top 15 important variables for predicting property crime are below. Most of the variables are from the socioeconomic data and few are from the land cover data.
+
+## Model Performance
+
+For violent crime prediction, xx has the lowest RMSE. Thus we will use this model to predict the violent crime rate in 2016.
+
+For property crime prediction, xx has the lowest RMSE. Thus we will use this model to predict the property crime rate in 2016.
 
 # Discussion
 
@@ -41,10 +71,24 @@ Burkhardt, Jesse, Jude Bayham, Ander Wilson, Ellison Carter, Jesse D.Berman, Kat
 
 Goin, Dana E., Kara E. Rudolph, and Jennifer Ahern. 2018."Predictors of Firearm Violence in Urban Communities: AMachine-Learning Approach." *Health & Place* 51 (May):61--67. <https://doi.org/10.1016/j.healthplace.2018.02.013>.
 
-Groff, Elizabeth, and Eric S McCord. 2012. "The Role of Neighborhood Parks as Crime Generators." *Security Journal* 25 (1): 1--24. <https://doi.org/10.1057/sj.2011.1>.
-
 Herrnstadt, Evan, Anthony Heyes, and Soodeh Saberian. 2016. "Air Pollution as a Cause of Violent Crime: Evidence from Los Angeles and Chicago."
 
 Murray, Rebecca K., and Marc L. Swatt. 2013. "Disaggregating the Relationship Between Schools and Crime: A Spatial Analysis."*Crime & Delinquency* 59 (2): 163--90. <https://doi.org/10.1177/0011128709348438>.
 
 Steinberg, Matthew P., Benjamin Ukert, and John M. MacDonald. 2019."Schools as Places of Crime? Evidence from Closing ChronicallyUnderperforming Schools." *Regional Science and UrbanEconomics* 77 (July): 125--40. <https://doi.org/10.1016/j.regsciurbeco.2019.04.001>.
+
+# Data Source
+
+Ailshire, Jennifer, Melendez, Robert, Chenoweth, Megan, and Gypin, Lindsay. National Neighborhood Data Archive (NaNDA): Street Connectivity by Census Tract and ZIP Code Tabulation Area, United States, 2010 and 2020. Inter-university Consortium for Political and Social Research \[distributor\], 2023-02-13. <https://doi.org/10.3886/ICPSR38580.v2>
+
+Clarke, Philippa, Melendez, Robert, and Chenoweth, Megan. National Neighborhood Data Archive (NaNDA): Crimes by County, United States, 2002-2014. Inter-university Consortium for Political and Social Research \[distributor\], 2023-01-30. <https://doi.org/10.3886/ICPSR38649.v1>
+
+Clarke, Philippa, Noppert, Grace, Melendez, Robert, Chenoweth, Megan, and Gypin, Lindsay. National Neighborhood Data Archive (NaNDA): Socioeconomic Status and Demographic Characteristics of Census Tracts and ZIP Code Tabulation Areas, United States, 2000-2020. Inter-university Consortium for Political and Social Research \[distributor\], 2023-04-17. <https://doi.org/10.3886/ICPSR38528.v3>
+
+Finlay, Jessica M., Melendez, Robert, Pan, Longrong, Esposito, Michael, Khan, Anam, Li, Mao, ... Gypin, Lindsay. National Neighborhood Data Archive (NaNDA): Polluting Sites by Census Tract and ZIP Code Tabulation Area, United States, 1987-2021. Inter-university Consortium for Political and Social Research \[distributor\], 2023-12-04. <https://doi.org/10.3886/ICPSR38597.v2>
+
+Kim, Min Hee, Li, Mao, Sylvers, Dominique, Esposito, Michael, Gomez-Lopez, Iris, Clarke, Philippa, and Chenoweth, Megan. National Neighborhood Data Archive (NaNDA): School District Characteristics and School Counts by Census Tract, ZIP Code Tabulation Area, and School District, 2000-2018. Inter-university Consortium for Political and Social Research \[distributor\], 2022-10-10. <https://doi.org/10.3886/ICPSR38569.v1>
+
+Melendez, Robert, Li, Mao, Khan, Anam, Gomez-Lopez, Iris, Clarke, Philippa, and Chenoweth, Megan. National Neighborhood Data Archive (NaNDA): Land Cover by Census Tract and ZIP Code Tabulation Area, United States, 2001-2016. Inter-university Consortium for Political and Social Research \[distributor\], 2022-12-07. <https://doi.org/10.3886/ICPSR38598.v1>
+
+United States Department of Justice. Federal Bureau of Investigation. Uniform Crime Reporting Program Data: County-Level Detailed Arrest and Offense Data, United States, 2016. Inter-university Consortium for Political and Social Research \[distributor\], 2019-01-17. <https://doi.org/10.3886/ICPSR37059.v3>
