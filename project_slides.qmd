@@ -166,9 +166,7 @@ fig <- subplot(violence_map,
 fig
 ```
 
--   Findings:
-    -   Property crime rates are higher than violent crime rates in general.
-    -   Higher violent and property crime rate in South.
+-   Findings: Property crime rates are higher than violent crime rates in general; Higher violent and property crime rate in South.
 
 ## Prediciting Crime Rate in the U.S. in 2016 {.smaller}
 
