@@ -1565,7 +1565,15 @@ Final prediction for property crime rate in 2016 has a RMSE of 0.4592552
 
 # Crime Rate Maps
 
+To better understand the data, we used package `plotly` to map the average violent and property crime rates across the U.S. from 2009 to 2014, displayed on a state-by-state basis.
+
 ## data cleaning
+
+We generated the number of crimes per 100,000 people in each county as the crime rate.
+
+$$
+Rate = \left( \frac{Crime}{Population} \right)10 ^ 5
+$$ {#eq-binomial}
 
 ```{r}
 crime_09_14 <- crime_predictive|>
@@ -1583,6 +1591,8 @@ crime_09_14 <- crime_predictive|>
 ```
 
 ## extract FIPS codes
+
+We then converted county units to states based on the five-digit FIPS code to more visually compare differences between regions.
 
 ```{r}
 
@@ -1615,7 +1625,9 @@ state_fips_to_abb <-
 
 ```
 
-## map
+## Choropleth map
+
+Finally, we chose the choropleth map to illustrate the average violent crime and property crime rate in the U.S., 2009 - 2014. To keep the visualization informative, we used `plotly` package to add hover text and so on for interactivity. There are also other interactive settings for readers, like zoom in and out for details.
 
 ```{r}
 
@@ -1675,7 +1687,7 @@ violence_map <-
   ) |>
   
   layout(
-    title = 'US Crimes Rate by State, 2009 - 2014',
+    title = 'Average US Crimes Rate by State, 2009 - 2014',
     geo = list(
       scope = 'usa',
       projection = list(type = 'albers usa'),
@@ -1683,6 +1695,8 @@ violence_map <-
       lakecolor = toRGB('white')
     )
   )
+
+violence_map
 ```
 
 ## property crime rate
@@ -1717,18 +1731,21 @@ property_map <-
       lakecolor = toRGB('white')
     )
   )
+
+property_map
 ```
 
-## two maps together
+## Combine the maps
 
 ```{r}
-# Place the two maps side by side in a stacked layout
-fig <- subplot(violence_map, 
-               property_map, 
-               nrows = 2, 
-               margin = 0.05) 
+fig <- 
+  plotly::subplot(violence_map,
+                  property_map,
+                  nrows = 2,
+                  margin = 0.05)
 
 # Print the figure
 fig
-
 ```
+
+Areas with high crime rates are indicated by a darker red color. It can be seen that crime rate is higher in the south and near the border. There are also some interesting findings, such as the fact that Texas, which is usually considered to have a high rate of gun ownership, boasts a violent crime rate of less than 300, which could be influenced by population.

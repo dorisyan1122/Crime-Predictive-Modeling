@@ -160,7 +160,7 @@ fig <- subplot(violence_map,
 
 ```
 
-## US Crime Rate by State, 2009 - 2014 {.bigger}
+## Average US Crime Rate by State, 2009 - 2014 {.bigger}
 
 ```{r plot-slide, echo=FALSE, message=FALSE, warning=FALSE}
 fig
