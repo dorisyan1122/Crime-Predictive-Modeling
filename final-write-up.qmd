@@ -1,0 +1,84 @@
+---
+title: "Violent and Property Crime Rate Prediction in the U.S.: A Machine-learning Approach"
+author: "Ziwen Lu, Xuyan Xiu, Doris Yan"
+format: html
+editor: visual
+execute: 
+  warning: false
+embed-resources: true
+bibliography: references.bib
+---
+
+# Introduction
+
+Crime is a significant concern in public policy since crime directly affects individual and community well-being. Crime also has a huge impact on the economy as it increases the costs of public safety measures and deters investment. The estimated annual cost of crime is \$4.71 - \$5.67 trillion [@anderson2021]. The two major types of crimes in the United States are violent crime (homicide, rape, robbery, and aggravated assault) and property crime (burglary, larceny, and auto theft). According to the Federal Bureau of Investigation, there were 5,049,721 property crimes and 809,381 violent crimes reported in the United States in 2022. Therefore, we believe that it is important to understand the factors that predict crime and lend insights to policies that reduce crime and increase social stability.
+
+We are interested in learning about urban planning factors that predict crime rate. @goin2018 studied the predictors of firearm violence in California with a machine-learning approach. The covariates they use include ACS 5-year estimates of ZCTA-level community characteristics, alcohol outlet density, and climate. With a similar machine-learning methodology to study crimes, we will expand their scope by (1) covering a wider variety of crimes that include both property and violent crimes, (2) using county-level data from the entire U.S. (3) focusing on the socioeconomic status factors as well as the urban planning factors that predict crime.
+
+Crime and covariates datasets are available on Inter-university Consortium for Political and Social Research ([ICPSR](https://www.icpsr.umich.edu/web/ICPSR/series/1920)). All of the datasets are posted by National Neighborhood Data Archive (NaNDA) on ICPSR for storage. The covariates we choose include socioeconomic status and demographic characteristics [@clarke], school counts [@kim], street connectivity [@ailshire], the number of polluting sites [@finlay], and land cover (e.g., low-, medium-, or high-density development, forest, wetland, open water) [@melendez].
+
+Previous research support our choice of covariates. There is significant decline in crime following school closure in Philadelphia. The reduction in crime, mainly driven by the reduction in violent crime, is concentrated in places where high schools are closed [@steinberg2019]. Residential blocks with more schools have a significantly higher number of felonious and motor vehicle thefts (i.e., property crimes) [@murray2013]. In terms of street connectivity and land, there is significant relationship between traffic congestion and domestic violence. Extreme traffic increases the incidence of domestic violence by 9% in Los Angeles [@beland2018]. Environmental factors likewise have an effect on crime. Increased pollution has a positive effect on violent crimes in the United States. A 10% reduction in daily PM2.5 and ozone could save \$1.4 billion in crime costs per year [@burkhardt2019]. In contrast, the amount and access to green space in the urban environment has a mitigating impact on violent crime [@shepley2019]. The results are important for crime prevention.
+
+# Method
+
+## Data Retrieval
+
+To make our analysis reproducible, we use the function `icpsr_download` to download data. The downloaded data is stored in a sub-directory called `data` in the current directory. The process is repeated every time someone tries to run the code. For the analysis, data retrieval only needs to be done once.
+
+## Data Cleaning
+
+There are a few steps in data cleaning.
+
+1.  The unit of analysis in the crime data is county, identified by the 5-digit FIPS county code, whereas the unit of analysis for all predictors are is sub-county area, identified by 11-digit Census Tract FIPS code. Thus, for the socioeconomic status and urban planning predictors, we first sum up the sub-county area with the same first 5-digit FIPS code together. Then, we merge the socioeconomic status and urban planning data with the crime data by the shared 5-digit FIPS code.
+2.  We remove duplicate variables. For example, crime and socioeconomic data all have variables for population. However, since we are predicting crime, it would be more appropriate to use the population variable in the crime data, so we drop the population variable in the socioeconomic data. We also intent to drop the value with more than 50% missing values, but after exploring the data, we found no variable has more than 50% missing values.
+3.  We think it would be more appropriate to measure crime rate instead of the number of crime in each county because a county with more population would have more crimes. Measuring crime rate thus eliminates population as a strong predictor. Therefore, we generate a new variable for crime rate, which is the number of crime per 100,000 people. We use crime rate to map the average crime rate from 2002 to 2014.
+4.  The 2010 data shows that violent crime rate ranges from 9 to 2361, and property crime rate ranges from 31 to 8853. Given the large variation in crime rate, we performed a log-transformation for crime rate to reduce the variability and skewness of data.
+5.  After transforming census tract to county for the predictors, we filter by year. Predictive data is from 2010. Implementation data is from 2016. School counts, pollution, and land connectivity are all annual measures. We use ACS 5-year estimate of socioeconomic indicators from 2008-2012 on the modeling year 2010, ACS 5-year estimate of socioeconomic indicators from 2013-2017 on the implementation year 2016. We use street connectivity in 2010 on the modeling year 2010, and we use street connectivity in 2020 in the modeling year 2016, assuming street connectivity does not change significantly from 2016 to 2020.
+
+## Models
+
+We use regularized regression models including ridge and LASSO regression, XGBoost for ensembling, tree-based models, and Multivariate Adaptive Regression Splines (MARS). We split crime rate data into training and testing set. After selecting the model with the lowest RMSE on the testing set from 2010 predictive crime data, we use the best model to predict the 2016 implementation crime data. Finally, we compare our predictions in 2016 with the actual violent and property crime in 2016 and use RMSE to determine the robustness of our models.
+
+For all five models, we replace missing values in all predictor variables with the median of the respective variables using `step_impute_median` and remove the predictor variables with zero variance using `step_nzv`. We only normalize our regularized regression models (Ridge and LASSO) using `step_normalize` because they are more sensitive to the scale of predictor variables.
+
+## Metric Selection
+
+Because we want to make predictions and see how well our model perform, we decided to use RMSE as our metric.
+
+## Implementation
+
+We compare our predicted crime rate at 2016 with the actual crime rate data from 2016 [@unitedstatesdepartmentofjustice.federalbureauofinvestigation].
+
+# Result
+
+## Important Variables
+
+Based on the result from our random forest model, most of the important variables for predicting violent and property crime come from the socioeconomic data and few are from the land cover data.
+
+For violent crime, the top three important variables are *proportion of people non-Hispanic Black*, *Disadvantage 1*, and *proportion of families with Income less than 15K.*
+
+For property crime, the top three important variables are *Disadvantage1, Proportion of female-headed families with kids,* and *Disadvantage2.*
+
+*Disadvantage1* is the mean of proportion of people Non-Hispanic Black, proportion female-headed families with kids, proportion of households with public assistance income, proportion people with income past 12 months below poverty level, and proportion 16+ civilian labor force unemployed.
+
+*Disadvantage2* is the mean of proportion female-headed families with kids, proportion of households with public assistance income, proportion people with income past 12 months below poverty level, and proportion 16+ civilian labor force unemployed.
+
+## Model Performance
+
+For violent crime prediction, XG Boost has the lowest RMSE. Thus we use this model to predict the violent crime rate in 2016. Our final model fore predicting violent crime rate in 2016 has a RMSE of 0.593.
+
+For property crime prediction, Random Forest has the lowest RMSE. Thus we use this model to predict the property crime rate in 2016. Our final model fore predicting property crime rate in 2016 has a RMSE of 0.459.
+
+# Discussion
+
+It makes sense that social economic indicators characterize the outlook of both violent and property crimes. The important variables of both types of crime fall into the economic disadvantage category. Therefore, it is important to target crime prevention effort to areas that are poverty-stricken. Meanwhile, the local governments need to create programs that stimulate racial and ethnic-inclusive economic growth, such as employment program to reduce unemployment rate. Our model allows us to understand the community characteristics of violent crime rate and property crime rate.
+
+Our models are robust to predict the unseen data. Applying our model of violent crime rate on the implementation data in 2016 generates RMSE of 0.593, which means the average difference between our model's predicted values and the actual values is 0.593. Similarly, for property crime rate, the average difference between our model's predicted values and the actual values is 0.459.
+
+# Limitation
+
+One of the limitations to our approach is that we assume use street connectivity in 2020 on our implementation year 2016, as we assume street connectivity does not vary significantly between 2016 and 2020.
+
+Additionally, it is uncertain that our covariates of choice outline the entirety of crime rate prediction, because crime is a complicated social issue that implicates many other factors. For example, aside from community characteristics, @goin2018 also include the number the alcohol outlets and climate. It is possible that with more predictors, our models can have better performance.
+
+# 
