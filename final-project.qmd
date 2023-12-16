@@ -470,10 +470,9 @@ crime_all_2016 <-
 
 ```
 
-We then removed STATA label and attributes in outcome variables.
-
 ## 2010 predictive data EDA and data cleaning
 
+We then removed STATA label and attributes in outcome variables.
 ```{r}
 
 # remove STATA format and attributes
@@ -497,6 +496,7 @@ attr(crime_all_2010$log_property, "label") <- NULL
  
 str(crime_all_2010)
 
+# the suffix for SES indicator 2008-2012 and 2013-2017 is different, we remove the suffix so that the variable names in predictor and implementation data are the same
 remove_string_2010 <- 
   function(varname){
   sub("08_12","",varname)
@@ -505,7 +505,7 @@ remove_string_2010 <-
 crime_all_2010_cleaned <- 
   crime_all_2010|>
   
-  # eliminate missing values for outcome variables
+  # eliminate missing values and negative infinity for outcome variables
   
   filter(!is.na(log_viol) | !is.na(log_property)) |>
   filter(!(is.infinite(log_viol) | is.infinite(log_property)))|>
@@ -532,10 +532,8 @@ missing_values_percent_2010<-missing_values_2010|>
 
 ## 2016 implementation data EDA and data cleaning
 
+Repeat the above data cleaning process for implementation data in 2016.
 ```{r}
-
-# remove STATA format and attributes
-
 attr(crime_all_2016$viol, "format.stata") <- NULL
 attr(crime_all_2016$property, "format.stata") <- NULL
 attr(crime_all_2016$cpopcrim, "format.stata") <- NULL
@@ -595,7 +593,7 @@ Before starting the machine learning process, we used package `plotly` to map th
 
 ## Build dataset
 
-We generated the number of crimes per 100,000 people in each county as the crime rate.
+We generate crime rate as the number of crimes per 100,000 people.
 
 $$
 Rate = \left( \frac{Crime}{Population} \right)10 ^ 5
@@ -660,7 +658,7 @@ Finally, we chose the choropleth map to illustrate the average violent crime and
 
 ```{r}
 
-# Convert county-level data to state-level data, aggregate violent crime data
+# convert county-level data to state-level data, aggregate violent crime data
 
 crime_data_map <- crime_09_14 |>
   group_by(state_fips) |>
@@ -696,7 +694,7 @@ crime_data_map <- crime_09_14 |>
 
 ```{r}
 
-# Create and output the map for violent crime
+# create and output the map for violent crime
 
 violence_map <- 
   plot_geo(crime_data_map |>
@@ -731,7 +729,7 @@ violence_map <-
 ## property crime rate
 
 ```{r}
-# Create and output the map for property crime rate
+# create and output the map for property crime rate
 
 property_map <- 
   plot_geo(crime_data_map |>
@@ -773,7 +771,7 @@ fig <-
                   nrows = 2,
                   margin = 0.05)
 
-# Print the figure
+# print the figure
 fig
 
 ```
