@@ -170,26 +170,18 @@ fig
 
 ## Prediciting Crime Rate in the U.S. in 2016 {.smaller}
 
--   Inspired by [Rudolph, and Ahern (2018)](https://doi.org/10.1016/j.healthplace.2018.02.013), we want to use socioeconomic status indicators and urban planning indicators to predict violent and property crime rate in the U.S. in 2016
-
 -   Data from [National Neighborhood Data Archive (NaNDA)](https://www.icpsr.umich.edu/web/ICPSR/series/1920)
 
     -   Outcome Variable: crime rate (2010 for predictive and 2016 for implementation)
     -   Predictor Variables: socioeconomic status and urban planning features (street connectivity, school counts, land cover, and pollution sites)
-
--   Method
-
-    1). Data wrangling
-    2). Predictive model building: Ridge regression, Lasso regression, Random Forest, XG Boost, and MARS
-    3). Use the best model to predict crime rate in 2016 and compare with the actual crime rate
-
+    -   Top 3 Important Variables for Violent Crime: *proportion of people non-Hispanic Black*, *Disadvantage 1*, and *proportion of families with Income less than 15K.*
+    -   Top 3 Important Variables for Property Crime: *Disadvantage1, Proportion of female-headed families with kids,* and *Disadvantage2.*
+    
 ## Results {.smaller}
 
--   Violent Crime
-    -   XG Boost has the lowest RMSE (0.673).
-    -   Use XG boost to predict crime rate in 2016 and compare: RMSE of 0.593.
-    -   Top three important variables are *proportion of people non-Hispanic Black*, *Disadvantage 1*, and *proportion of families with Income less than 15K.*
--   Property Crime
-    -   Random Forest has the lowest RMSE (0.474).
-    -   Use XG boost to predict crime rate in 2016 and compare: RMSE of 0.459.
-    -   Top three important variables are *Disadvantage1, Proportion of female-headed families with kids,* and *Disadvantage2.*
+![Violent Crime](violent.png){width="511"} Violent
+![Property Crime](property.png){width="511"} Property
+
+-   Final prediction for violent crime rate in 2016 with XG Boost has a RMSE of 0.593.
+
+-   Final prediction for property crime rate in 2016 with Random Forest has a RMSE of 0.459.
