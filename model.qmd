@@ -33,7 +33,7 @@ dir.create("data")
 options("icpsr_email" = "dy212@georgetown.edu", "icpsr_password" = "Fbp9nbmKreLsubd8nL5H")
 ```
 
-### crime
+### crime predictive data
 
 ```{r}
 # takes 1-2 mins
@@ -45,6 +45,17 @@ icpsr_download(
 crime<-read_dta(here("data","ICPSR_38649","DS0001","38649-0001-Data.dta"))
 ```
 
+### crime implementation data
+```{r}
+# implementation crime data
+icpsr_download(
+  file_id = 37059,
+  download_dir = here("data")
+)
+
+crime_2016<-read_dta(here("data","ICPSR_37059","DS0004","37059-0004-Data.dta"))
+```
+
 ### ses
 
 ```{r}
@@ -54,6 +65,7 @@ icpsr_download(
   download_dir = here("data")
 )
 
+# predictive data and implementation data
 ses08_17<-read_dta(here("data","ICPSR_38528","DS0002","38528-0002-Data.dta"))
 ```
 
@@ -66,20 +78,10 @@ icpsr_download(
   download_dir = here("data")
 )
 
+# predictive data and implementation data
 schoolct<-read_dta(here("data","ICPSR_38569","DS0001","38569-0001-Data.dta"))
 ```
 
-### the number of parks
-
-```{r}
-# takes 1-2 mins
-icpsr_download(
-  file_id = 38586,
-  download_dir = here("data")
-)
-
-parks<-read_dta(here("data","ICPSR_38586","DS0001","38586-0001-Data.dta"))
-```
 
 ### street connectivity
 
@@ -90,7 +92,11 @@ icpsr_download(
   download_dir = here("data")
 )
 
-streetcon<-read_dta(here("data","ICPSR_38580","DS0001","38580-0001-Data.dta"))
+# predictive data
+streetcon_predictive<-read_dta(here("data","ICPSR_38580","DS0001","38580-0001-Data.dta"))
+
+# implementation data
+streetcon_implementation<-read_dta(here("data","ICPSR_38580","DS0003","38580-0003-Data.dta"))
 ```
 
 ### pollution
@@ -102,20 +108,10 @@ icpsr_download(
   download_dir = here("data")
 )
 
+# predictive data and implementation data
 pollution<-read_dta(here("data","ICPSR_38597","DS0001","38597-0001-Data.dta"))
 ```
 
-### urbanicity
-
-```{r}
-# takes 1 min
-icpsr_download(
-  file_id = 38606,
-  download_dir = here("data")
-)
-
-urban<-read_dta(here("data","ICPSR_38606","DS0001","38606-0001-Data.dta"))
-```
 
 ### land cover
 
@@ -126,37 +122,52 @@ icpsr_download(
   download_dir = here("data")
 )
 
+# predictive data and implementation data
 landcover<-read_dta(here("data","ICPSR_38598","DS0001","38598-0001-Data.dta"))
-```
-
-### road system
-
-```{r}
-# takes 1-2 min
-icpsr_download(
-  file_id = 38585,
-  download_dir = here("data")
-)
-
-road<-read_dta(here("data","ICPSR_38585","DS0001","38585-0001-Data.dta"))
 ```
 
 ## Clean data
 
-### crime
-
+### crime predictive
+We use annual measure of crime.
 ```{r}
-# crime data at 2013
-crime_data<-crime|>
+crime_2010<-crime|>
   rename_all(tolower)|>
   rename(county=stcofips)|>
-  select(county,year,viol,property,cpopcrim)
-
-crime_2013<-crime_data|>
-  filter(year == 2013)
+  select(county,year,viol,property,cpopcrim)|>
+  filter(year == 2010)|>
+  # generate crime rate per 100,000 people and the log transform
+  mutate(viol_rate = (viol / cpopcrim) * 100000,
+         property_rate = (property / cpopcrim) * 100000)|>
+  mutate(log_viol = log(viol_rate),
+       log_property = log(property_rate))
 ```
 
+### crime implementation
 ```{r}
+crime_2016_cleaned<-crime_2016|>
+  rename_all(tolower)|>
+  select(fips_st, fips_cty, cpopcrim, viol, property)|>
+  # concatenate fips_st and fips_cty to make county fips
+  mutate(fips_st = ifelse(fips_st >= 1 & fips_st <= 9, 
+                          paste0("0", fips_st), 
+                          as.character(fips_st)) 
+         )|>
+  mutate(fips_cty = str_pad(fips_cty, width = 3, pad = "0")
+         )|>
+  mutate(county = str_c(fips_st, fips_cty))|>
+  select(-fips_cty, -fips_st)|>
+  # generate crime rate per 100,000 people and the log transform
+  mutate(viol_rate = (viol / cpopcrim) * 100000,
+         property_rate = (property / cpopcrim) * 100000)|>
+  mutate(log_viol = log(viol_rate),
+       log_property = log(property_rate))
+  
+```
+
+
+```{r}
+# create a function for effective data cleaning
 clean_data<-
   function(data) {
     cleaned_data <- data |> 
@@ -169,10 +180,32 @@ clean_data<-
 ```
 
 ### ses
+SES predictive data of 2010 is from ACS five-year estimate from 2008 to 2012.
+SES implementation data of 2016 is from ACS five-years estimate from 2013 to 2016.
 
 ```{r}
-#  ACS five-year estimate 2013-2017
-ses_2013<-clean_data(ses08_17)|>
+# ACS 2008 to 2012 for year 2010
+ses_2010<-clean_data(ses08_17)|>
+  group_by(county)|>
+  summarise_all(sum, na.rm = TRUE)|>
+  pivot_longer(
+  cols = !county, 
+  names_to = "indicator",
+  values_to = "value"
+  )|>
+  filter(str_sub(indicator, -2) == "12")|>
+  # pivot SES indicators back as variables
+  pivot_wider(
+    names_from = indicator,
+    values_from = value
+  )|>
+  # cpopcrim and totpop08_12 are all total population estimate. cpopcrim is from crime dataset, totpop08_12 is from ses dataset. 
+  # since we are predicting crime rate, it would be more appropriate to use the population variable in the crime dataset, thus we will use cpopcrim as population estimate
+  select(-totpop08_12)
+   
+
+# ACS 2013 to 2017 for year 2016
+ses_2016<-clean_data(ses08_17)|>
   group_by(county)|>
   summarise_all(sum, na.rm = TRUE)|>
   pivot_longer(
@@ -185,144 +218,173 @@ ses_2013<-clean_data(ses08_17)|>
   pivot_wider(
     names_from = indicator,
     values_from = value
-  )
+  )|>
+  select(-totpop13_17)
 ```
 
 ### school counts
 
+We use annual school counts.
 ```{r}
-# school counts at 2013
-schoolct_2013<-clean_data(schoolct)|>
+# school counts at 2016
+schoolct_2010<-clean_data(schoolct)|>
   group_by(county,year)|>
   summarise_all(sum, na.rm = TRUE)|>
-  filter(year == 2013)
-```
+  filter(year == 2010)
 
-### parks
-
-```{r}
-# from 2010 decennial census
-parks_2013<-clean_data(parks)|>
-  group_by(county)|>
-  summarise_all(sum, na.rm = TRUE)
+schoolct_2016<-clean_data(schoolct)|>
+  group_by(county,year)|>
+  summarise_all(sum, na.rm = TRUE)|>
+  filter(year == 2016)
 ```
 
 ### street connectivity
 
+We use street connectivity data at 2010 for predictive data, and street connectivity data at 2020 for implementation data.
 ```{r}
-# from 2010 decennial census
-streetcon_2013<-clean_data(streetcon)|>
+# from 2010 school count data
+streetcon_2010<-clean_data(streetcon_predictive)|>
+  group_by(county)|>
+  summarise_all(sum, na.rm = TRUE)
+
+# use 2020 data to represent 2016 school counts
+streetcon_2016<-streetcon_implementation|>
+  rename_all(tolower)|>
+  mutate(county = substr((tract_fips20), 1, 5))|>
+  select(-tract_fips20)|>
   group_by(county)|>
   summarise_all(sum, na.rm = TRUE)
 ```
 
 ### pollution
 
+We use annual measure of pollution.
 ```{r}
-# pollution in 2013
-pollution_2013<-clean_data(pollution)|>
+# pollution in 2010
+pollution_2010<-clean_data(pollution)|>
   group_by(county,year)|>
   summarise_all(sum, na.rm = TRUE)|>
-  filter(year == 2013)
-```
+  filter(year == 2010)
 
-### urbanicity
-
-```{r}
-# from 2010 decennial census
-urban_2013<-clean_data(urban)|>
-  group_by(county)|>
-  summarise_all(sum, na.rm = TRUE)
+# pollution in 2016
+pollution_2016<-clean_data(pollution)|>
+  group_by(county,year)|>
+  summarise_all(sum, na.rm = TRUE)|>
+  filter(year == 2016)
 ```
 
 ### land cover
 
+We use annual interpolation of land cover. 
 ```{r}
-# from 2010 decennial census
-landcover_2013<-landcover|>
+# land cover at 2010
+landcover_2010<-landcover|>
   rename_all(tolower)|>
   mutate(county = substr((tract_fips), 1, 5))|>
-  select(-tract_fips)|>
+  select(-tract_fips, -intp_flag)|>
   group_by(county, year_intp)|>
   summarise_all(sum, na.rm = TRUE) |>
-  filter(year_intp == 2013)
-```
+  filter(year_intp == 2010)
 
-### road system
-
-```{r}
-# from 2010 decennial census
-road_2013<-clean_data(road)|>
-  group_by(county)|>
-  summarise_all(sum, na.rm = TRUE)
+# land cover at 2016
+landcover_2016<-landcover|>
+  rename_all(tolower)|>
+  mutate(county = substr((tract_fips), 1, 5))|>
+  select(-tract_fips, -intp_flag)|>
+  group_by(county, year_intp)|>
+  summarise_all(sum, na.rm = TRUE) |>
+  filter(year_intp == 2016)
 ```
 
 ## Combine All Datasets
-
+### predictive data
 ```{r}
-# combine the data sets with the by "county" and "year" columns
-crime_all <- full_join(
-  crime_2013,
+# combine the data sets with the by "county" column
+crime_all_2010 <- full_join(
+  crime_2010,
   full_join(
-    ses_2013,
+    ses_2010,
    full_join(
-     schoolct_2013,
+     schoolct_2010,
     full_join(
-      parks_2013,
+      streetcon_2010,
       full_join(
-        streetcon_2013,
-          full_join(
-            pollution_2013, 
-            full_join(
-              urban_2013,
-              full_join(
-                landcover_2013, road_2013, by = "county")
-              ),
-            by = "county"
-            ),
-          by = "county"
-          ),
-        by = "county"
+        pollution_2010, landcover_2010, by = "county"
         ),
       by = "county"
       ),
     by = "county"
     ),
    by = "county"
+   ),
+  by = "county"
   )
 
-crime_all<-crime_all|>
+crime_all_2010<-crime_all_2010|>
   select(-year.y, -year.x, -year_intp)
 ```
 
-# EDA and Data cleaning
+### implementation data
 
 ```{r}
-# remove STATA attributes
-attr(crime_all$viol, "format.stata") <- NULL
-attr(crime_all$property, "format.stata") <- NULL
-attr(crime_all$cpopcrim, "format.stata") <- NULL
+# combine the data sets with the by "county" and "year" columns
+crime_all_2016 <- full_join(
+  crime_2016_cleaned,
+  full_join(
+    ses_2016,
+   full_join(
+     schoolct_2016,
+    full_join(
+      streetcon_2016,
+      full_join(
+        pollution_2016, landcover_2010, by = "county"
+        ),
+      by = "county"
+      ),
+    by = "county"
+    ),
+   by = "county"
+   ),
+  by = "county"
+  )
 
-attr(crime_all$viol, "label") <- NULL
-attr(crime_all$property, "label") <- NULL
-attr(crime_all$cpopcrim, "label") <- NULL
+crime_all_2016<-crime_all_2016|>
+  select(-year.y, -year.x, -year_intp)|>
+  select(county, everything())|>
+  mutate(year = 2016)
+```
+
+# EDA and Data cleaning of predictive data in 2010
+
+```{r}
+# remove STATA format and attributes
+attr(crime_all_2010$viol, "format.stata") <- NULL
+attr(crime_all_2010$property, "format.stata") <- NULL
+attr(crime_all_2010$cpopcrim, "format.stata") <- NULL
+attr(crime_all_2010$viol_rate, "format.stata") <- NULL
+attr(crime_all_2010$property_rate, "format.stata") <- NULL
+attr(crime_all_2010$log_viol, "format.stata") <- NULL
+attr(crime_all_2010$log_property, "format.stata") <- NULL
+
+
+attr(crime_all_2010$viol, "label") <- NULL
+attr(crime_all_2010$property, "label") <- NULL
+attr(crime_all_2010$cpopcrim, "label") <- NULL
+attr(crime_all_2010$viol_rate, "label") <- NULL
+attr(crime_all_2010$property_rate, "label") <- NULL
+attr(crime_all_2010$log_viol, "label") <- NULL
+attr(crime_all_2010$log_property, "label") <- NULL
  
-str(crime_all)
+str(crime_all_2010)
 
-# generate log(violent crime) and log (property crime)
-crime_all_cleaned <- crime_all|>
-  # generate crime rate per 100,000 people and the log value of it
-  mutate(log_viol = log((viol / cpopcrim) * 100000),
-       log_property = log((property / cpopcrim) * 100000)) |>
-  filter(!is.na(log_viol) & !is.na(log_property)) |>
-  filter(!(is.infinite(log_viol) | is.infinite(log_property)))|>
-  # cpopcrim, tot_pop_census, and totpop13_17 are all total population estimate. cpopcrim is from crime dataset, tot_pop_census is from urbanicity dataset, totpop13_17 is from ses dataset. 
-  # since we are predicting crime rate, it would be more appropriate to use the population variable in the crime dataset, thus we will use cpopcrim as population estimate
-  select(-tot_pop_census,
-         -totpop13_17)
+crime_all_2010_cleaned<-crime_all_2010|>
+  # eliminate missing values for outcome variables
+  filter(!is.na(log_viol) | !is.na(log_property)) |>
+  filter(!(is.infinite(log_viol) | is.infinite(log_property)))
+
 
 # explore missing values
-missing_values <- colSums(is.na(crime_all_cleaned))
+missing_values <- colSums(is.na(crime_all_2010_cleaned))
 
 missing_values
 
@@ -330,16 +392,58 @@ missing_values<-as.data.frame(missing_values)
 
 # look at the variables with the most missing values, no variable has over 50% missing values
 missing_values_percent<-missing_values|>
-  mutate(missing_percent = missing_values/nrow(crime_all_cleaned))|>
+  mutate(missing_percent = missing_values/nrow(crime_all_2010_cleaned))|>
   arrange(desc(missing_percent))|>
   top_n(10)
 ```
 
+# EDA and Data cleaning of implementation data in 2016
+
+```{r}
+# remove STATA format and attributes
+attr(crime_all_2016$viol, "format.stata") <- NULL
+attr(crime_all_2016$property, "format.stata") <- NULL
+attr(crime_all_2016$cpopcrim, "format.stata") <- NULL
+attr(crime_all_2016$viol_rate, "format.stata") <- NULL
+attr(crime_all_2016$property_rate, "format.stata") <- NULL
+attr(crime_all_2016$log_viol, "format.stata") <- NULL
+attr(crime_all_2016$log_property, "format.stata") <- NULL
+
+
+attr(crime_all_2016$viol, "label") <- NULL
+attr(crime_all_2016$property, "label") <- NULL
+attr(crime_all_2016$cpopcrim, "label") <- NULL
+attr(crime_all_2016$viol_rate, "label") <- NULL
+attr(crime_all_2016$property_rate, "label") <- NULL
+attr(crime_all_2016$log_viol, "label") <- NULL
+attr(crime_all_2016$log_property, "label") <- NULL
+ 
+str(crime_all_2016)
+
+crime_all_2016_cleaned<-crime_all_2016|>
+  # eliminate missing values for outcome variables
+  filter(!is.na(log_viol) | !is.na(log_property)) |>
+  filter(!(is.infinite(log_viol) | is.infinite(log_property)))
+
+
+# explore missing values
+missing_values <- colSums(is.na(crime_all_2016_cleaned))
+
+missing_values
+
+missing_values<-as.data.frame(missing_values)
+
+# look at the variables with the most missing values, no variable has over 50% missing values
+missing_values_percent<-missing_values|>
+  mutate(missing_percent = missing_values/nrow(crime_all_2016_cleaned))|>
+  arrange(desc(missing_percent))|>
+  top_n(10)
+```
 # Splitting Data
 
 ```{r}
 set.seed(904)
-crime_split <- initial_split(crime_all_cleaned, prop = 0.8)
+crime_split <- initial_split(crime_all_2010_cleaned, prop = 0.8)
 
 crime_train <- training(crime_split)
 crime_test <- testing(crime_split)
@@ -401,7 +505,7 @@ ridge_v_resamples <-
   tune_grid(
     resamples = crime_folds,
     grid = ridge_v_grid,
-    metrics = metric_set(rmse)
+    metrics = metric_set(rsq)
     )
 
 ridge_v_resamples |>
@@ -1279,7 +1383,9 @@ Because XG Boost has the lowest RMSE value, we will use MARS as our final model 
 ### crime
 
 ```{r}
-# crime data at 2013
+# takes 1-2 mins
+
+
 crime_data<-crime|>
   rename_all(tolower)|>
   rename(county=stcofips)|>
@@ -1287,6 +1393,8 @@ crime_data<-crime|>
 
 crime_2013<-crime_data|>
   filter(year == 2013)
+```
+
 ```
 
 ```{r}
