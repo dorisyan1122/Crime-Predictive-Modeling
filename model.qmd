@@ -257,7 +257,7 @@ road_2013<-clean_data(road)|>
   summarise_all(sum, na.rm = TRUE)
 ```
 
-# Combine All Datasets
+## Combine All Datasets
 
 ```{r}
 # combine the data sets with the by "county" and "year" columns
@@ -1270,9 +1270,159 @@ bind_rows(
 ```
 Because XG Boost has the lowest RMSE value, we will use MARS as our final model for violent crime.
 
-## Prediction
+# Prediction
+
+## Clean data
+
+### crime
 
 ```{r}
+# crime data at 2013
+crime_data<-crime|>
+  rename_all(tolower)|>
+  rename(county=stcofips)|>
+  select(county,year,viol,property,cpopcrim)
 
+crime_2013<-crime_data|>
+  filter(year == 2013)
+```
+
+```{r}
+clean_data<-
+  function(data) {
+    cleaned_data <- data |> 
+      rename_all(tolower)|>
+      mutate(county = substr((tract_fips10), 1, 5))|>
+      select(-tract_fips10)
+
+  return(cleaned_data)
+}
+```
+
+### ses
+
+```{r}
+#  ACS five-year estimate 2013-2017
+ses_2013<-clean_data(ses08_17)|>
+  group_by(county)|>
+  summarise_all(sum, na.rm = TRUE)|>
+  pivot_longer(
+  cols = !county, 
+  names_to = "indicator",
+  values_to = "value"
+  )|>
+  filter(str_sub(indicator, -2) == "17")|>
+  # pivot SES indicators back as variables
+  pivot_wider(
+    names_from = indicator,
+    values_from = value
+  )
+```
+
+### school counts
+
+```{r}
+# school counts at 2013
+schoolct_2013<-clean_data(schoolct)|>
+  group_by(county,year)|>
+  summarise_all(sum, na.rm = TRUE)|>
+  filter(year == 2013)
+```
+
+### parks
+
+```{r}
+# from 2010 decennial census
+parks_2013<-clean_data(parks)|>
+  group_by(county)|>
+  summarise_all(sum, na.rm = TRUE)
+```
+
+### street connectivity
+
+```{r}
+# from 2010 decennial census
+streetcon_2013<-clean_data(streetcon)|>
+  group_by(county)|>
+  summarise_all(sum, na.rm = TRUE)
+```
+
+### pollution
+
+```{r}
+# pollution in 2013
+pollution_2013<-clean_data(pollution)|>
+  group_by(county,year)|>
+  summarise_all(sum, na.rm = TRUE)|>
+  filter(year == 2013)
+```
+
+### urbanicity
+
+```{r}
+# from 2010 decennial census
+urban_2013<-clean_data(urban)|>
+  group_by(county)|>
+  summarise_all(sum, na.rm = TRUE)
+```
+
+### land cover
+
+```{r}
+# from 2010 decennial census
+landcover_2013<-landcover|>
+  rename_all(tolower)|>
+  mutate(county = substr((tract_fips), 1, 5))|>
+  select(-tract_fips)|>
+  group_by(county, year_intp)|>
+  summarise_all(sum, na.rm = TRUE) |>
+  filter(year_intp == 2013)
+```
+
+### road system
+
+```{r}
+# from 2010 decennial census
+road_2013<-clean_data(road)|>
+  group_by(county)|>
+  summarise_all(sum, na.rm = TRUE)
+```
+
+## Combine All Datasets
+
+```{r}
+# combine the data sets with the by "county" and "year" columns
+crime_all <- full_join(
+  crime_2013,
+  full_join(
+    ses_2013,
+   full_join(
+     schoolct_2013,
+    full_join(
+      parks_2013,
+      full_join(
+        streetcon_2013,
+          full_join(
+            pollution_2013, 
+            full_join(
+              urban_2013,
+              full_join(
+                landcover_2013, road_2013, by = "county")
+              ),
+            by = "county"
+            ),
+          by = "county"
+          ),
+        by = "county"
+        ),
+      by = "county"
+      ),
+    by = "county"
+    ),
+   by = "county"
+  )
+
+crime_all<-crime_all|>
+  select(-year.y, -year.x, -year_intp)
 ```
 
