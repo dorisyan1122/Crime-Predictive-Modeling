@@ -845,6 +845,7 @@ bind_rows(
 ) |>
   arrange(mean)
 ```
+
 Because XG Boost has the lowest RMSE value, we will use MARS as our final model for violent crime.
 
 ## Prediction
@@ -1268,6 +1269,7 @@ bind_rows(
 ) |>
   arrange(mean)
 ```
+
 Because XG Boost has the lowest RMSE value, we will use MARS as our final model for violent crime.
 
 # Prediction
@@ -1425,4 +1427,3 @@ crime_all <- full_join(
 crime_all<-crime_all|>
   select(-year.y, -year.x, -year_intp)
 ```
-
