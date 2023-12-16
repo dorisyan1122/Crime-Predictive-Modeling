@@ -4,6 +4,7 @@ Ziwen Lu, Xuyan Xiu, Doris Yan's final project
 Our project contains three parts:
 
 [Write-up](https://dorisyan1122.github.io/PPOL6819-Final-Project/final-write-up) full paper "write-up", including introduction, model and methods, results and limitations of our project;
+
 [Project](https://dorisyan1122.github.io/PPOL6819-Final-Project/final-project) geospatial mapping of average crime rate from 2009 to 2014;
 predictive modeling of 2010 crime rate on 2016 crime rate.
 
