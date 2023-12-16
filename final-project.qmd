@@ -1438,7 +1438,7 @@ rmse_xgb_v_2016
 
 ```
 
-Final prediction for violent crime rate in 2016 has a RMSE of 0.5927494.
+Final prediction for violent crime rate in 2016 has a RMSE of 0.593.
 
 # Property Crime
 
@@ -2046,4 +2046,4 @@ rmse_rf_p_2016
 
 ```
 
-Final prediction for property crime rate in 2016 has a RMSE of 0.4592552.
+Final prediction for property crime rate in 2016 has a RMSE of 0.459.
