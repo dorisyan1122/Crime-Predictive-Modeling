@@ -1,5 +1,5 @@
 ---
-title: "Predictive Model"
+title: "Final Project"
 author: "Ziwen Lu, Xuyan Xiu, Doris Yan"
 format: html
 editor: visual
@@ -22,6 +22,7 @@ library(vip)
 library(haven)
 library(here)
 library(icpsrdata)
+library(plotly)
 dir.create("data")
 ```
 
@@ -83,6 +84,9 @@ crime_predictive<-read_dta(here("data","ICPSR_38649","DS0001","38649-0001-Data.d
 
 # crime implementation data
 crime_implementation<-read_dta(here("data","ICPSR_37059","DS0004","37059-0004-Data.dta"))
+
+# crime map data
+crime_09_14 <- read_dta(here("data","ICPSR_38649", "DS0001", "38649-0001-Data.dta"))
 
 # ses predictive data and implementation data
 ses08_17<-read_dta(here("data","ICPSR_38528","DS0002","38528-0002-Data.dta"))
@@ -541,7 +545,7 @@ county<-crime_test$county
 ridge_v_predictions_df<-
   tibble(county,actual,ridge_v_predictions)
 
-rmse_ridge<-rmse(ridge_v_predictions_df, actual, ridge_v_predictions)
+rmse_ridge_v<-rmse(ridge_v_predictions_df, actual, ridge_v_predictions)
 ```
 
 ## Lasso
@@ -633,7 +637,7 @@ county<-crime_test$county
 lasso_v_predictions_df<-
   tibble(county,actual,lasso_v_predictions)
 
-rmse_lasso<-rmse(lasso_v_predictions_df, actual, lasso_v_predictions)
+rmse_lasso_v<-rmse(lasso_v_predictions_df, actual, lasso_v_predictions)
 ```
 
 ## Random Forest
@@ -722,12 +726,13 @@ county<-crime_test$county
 rf_v_predictions_df<-
   tibble(county,actual,rf_v_predictions)
 
-rmse_rf<-rmse(rf_v_predictions_df, actual, rf_v_predictions)
+rmse_rf_v<-rmse(rf_v_predictions_df, actual, rf_v_predictions)
 ```
 
-### Selecting the top 15 important variables
+### selecting the top 15 important variables
 
 ```{r}
+set.seed(904)
 rf_v_final_wf <- 
   rf_v_wf |> 
   finalize_workflow(select_best(rf_v_resamples))
@@ -737,33 +742,32 @@ rf_v_fit <-
   fit(data = crime_all_2010_cleaned)
 
 crime_labels <- c(
-  pnhblack08_12 = "Proportion of people non-Hispanic Black",
-  pin1b_08_12 = "Proportion of families with Income less than 15K",
-  disadvantage08_12  = "Disadvantage1",
-  ppubas08_12   = "Prop. of households with public assistance income",
-  ppov08_12  = "Prop. ppl w/ income past 12 months below poverty level",
+  pnhblack = "Proportion of people non-Hispanic Black",
+  pin1b_ = "Proportion of families with Income less than 15K",
+  disadvantage  = "Disadvantage1",
+  ppubas = "Prop. of households with public assistance income",
+  ppov = "Prop. ppl w/ income past 12 months below poverty level",
   value_52 = "Road covered by Shrub/Scrub (sqm)",
-  pfhfam08_12 = "Proportion female-headed families w/ kids",
-  disadvantage2_08_12 = "Disadvantage2",
+  pfhfam = "Proportion female-headed families w/ kids",
+  disadvantage2_ = "Disadvantage2",
   prop_value_41 = "Prop. road covered by deciduous Forest (sqm)",
-  pnhwhite08_12 = "Proportion of people non-Hispanic White",
-  ped1_08_12 = "Prop. w/ less than high school diploma",
+  pnhwhite = "Proportion of people non-Hispanic White",
+  ped1_ = "Prop. w/ less than high school diploma",
   prop_value_52 = "Prop. road covered by Shrub/Scrub (sqm)",
-  phispanic08_12 = "Proportion of people of Hispanic origin",
-  pin2b_08_12 = "Proportion of families with Income 15-30K",
-  pnwhite08_12 = "Proportion of people non-Hispanic White",
+  phispanic = "Proportion of people of Hispanic origin",
+  pin2b_ = "Proportion of families with Income 15-30K",
+  pnwhite = "Proportion of people non-Hispanic White",
   value_41 = "Road covered by deciduous Forest (sqm)",
-  punemp08_12 = "Prop. 16+ civ labor force unemployed",
+  punemp = "Prop. 16+ civ labor force unemployed",
   prop_value_21 = "Prop. Developed, Open Space (sqm)",
   value_24 = "Road Developed, High Intensity (sqm)",
   prop_value_24 = "Prop road Developed, High Intensity (sqm)",
   prop_value_23 = "Prop. Road Developed, Medium Intensity (sqm)",
   prop_value_22 = "Prop. Road Developed, Low Intensity (sqm)",
-  p18_2908_12  = "Proportion of population 18-29 years of age",
-  popden08_12 = "Persons per square mile"
+  p18_29  = "Proportion of population 18-29 years of age",
+  popden = "Persons per square mile"
 )
 
-set.seed(904)
 rf_v_fit|>
   extract_fit_parsnip()|>
   vip(num_features = 15) %>%
@@ -778,72 +782,11 @@ rf_v_fit|>
   geom_col()
 ```
 
-## Linear Regression
+Based on the result from random forest model, the top 15 important variables for predicting violent crime are above. Most of the variables are from the socioeconomic data and few are from the land cover data.
 
-### feature and target engineering
+Disadvantage1 is the mean of proportion of people Non-Hispanic Black, proportion female-headed families with kids, proportion of households with public assistance income, proportion people with income past 12 months below poverty level, and proportion 16+ civilian labor force unemployed.
 
-```{r}
-# build a linear regression recipe
-lm_v_rec <-
-  recipe(log_viol ~ .,
-         data = crime_train) |>
-  update_role(county,
-              year,
-              viol,
-              viol_rate,
-              property_rate,
-              property,
-              log_property,
-              new_role = "id") |>
-  step_impute_median(all_predictors())|>
-  step_nzv(all_predictors())
-
-lm_v_mod <- linear_reg() |>
-  set_mode(mode = "regression") |>
-  set_engine(engine = "lm")
-
-lm_v_wf <- workflow() |>
-  add_recipe(lm_v_rec) |>
-  add_model(lm_v_mod)
-```
-
-### choose the best model
-
-```{r}
-set.seed(904)
-lm_v_resamples <- lm_v_wf |>
-  fit_resamples(resamples = crime_folds)
-
-lm_v_resamples |>
-  collect_metrics()
-```
-
-### prediction
-
-```{r}
-set.seed(904)
-lm_v_pre_wf <- 
-  lm_v_wf |> 
-  finalize_workflow(select_best(lm_v_resamples))
-
-lm_v_pre_wf<-
-  fit(lm_v_pre_wf, 
-      data = crime_train)
-
-lm_v_predictions <- 
-  predict(object = lm_v_pre_wf, 
-          new_data = crime_test)$.pred
-
-actual<-crime_test$log_viol
-
-county<-crime_test$county
-
-lm_v_predictions_df<-
-  tibble(county,actual,lm_v_predictions)
-
-rmse_lm<-rmse(lm_v_predictions_df, actual, lm_v_predictions)
-
-```
+Disadvantage2 is the mean of proportion female-headed families with kids, proportion of households with public assistance income, proportion people with income past 12 months below poverty level, and  proportion 16+ civilian labor force unemployed.
 
 ## MARS
 
@@ -937,13 +880,13 @@ county<-crime_test$county
 mars_v_predictions_df<-
   tibble(county,actual,mars_v_predictions)
 
-rmse_mars<-rmse(mars_v_predictions_df, actual, mars_v_predictions)
+rmse_mars_v<-rmse(mars_v_predictions_df, actual, mars_v_predictions)
 
 ```
 
 ## XG Boost
 
-## feature and target engineering
+### feature and target engineering
 
 ```{r}
 xgb_v_rec <- 
@@ -1036,34 +979,207 @@ county<-crime_test$county
 xgb_v_predictions_df<-
   tibble(county,actual,xgb_v_predictions)
 
-rmse_xgb<-rmse(xgb_v_predictions_df, actual, xgb_v_predictions)
+rmse_xgb_v<-rmse(xgb_v_predictions_df, actual, xgb_v_predictions)
 ```
 
 ## Final comparison of rmse
 
 ```{r}
-# data_frame(Model = c("Violent Crime Ridge regression",
-#                  "Violent Crime Lasso regression",
-#                  "Violent Crime Random Forest",
-#                  "Violent Crime Linear Regression",
-#                  "Violent Crime MARS",
-#                  "Violent Crime XG Boost"),
-#        RMSE = (rmse_lasso, rmse_ridge, rmse_rf, rmse_lm, rmse_mars, rmse_xgb)
-# )
-
-bind_rows(`Violent Crime Ridge regression`= rmse_lasso, 
-          `Violent Crime Lasso regression`= rmse_ridge, 
-          `Violent Crime Random Forest` = rmse_rf, 
-          `Violent Crime Linear Regression` = rmse_lm, 
-          `Violent Crime MARS` = rmse_mars,
-          `Violent Crime XG Boost`= rmse_xgb)
-
-
+bind_rows(`Violent Crime Ridge regression`= rmse_lasso_v, 
+          `Violent Crime Lasso regression`= rmse_ridge_v, 
+          `Violent Crime Random Forest` = rmse_rf_v, 
+          `Violent Crime MARS` = rmse_mars_v,
+          `Violent Crime XG Boost`= rmse_xgb_v)
 ```
 
-Because random forest and XG Boost have the lowest RMSE value, we will use random forest and XG boost as models for violent crime.
+Because XG Boost has the lowest RMSE value, we will use XG boost to predict violent crime rate in 2016.
 
 # Property Crime
+
+## Ridge Regression
+
+### feature and target engineering
+
+```{r}
+# create a recipe
+ridge_p_rec <- 
+  recipe(log_property ~ .,
+         data = crime_train) |>
+  update_role(county,
+              year,
+              viol,
+              viol_rate,
+              property_rate,
+              property,
+              log_viol,
+              new_role = "id") |>
+  step_impute_median(all_predictors())|>
+  step_nzv(all_predictors())|>
+  step_normalize(all_predictors())
+ 
+# check if feature engineering works to remove variables
+ridge_p_summary<-summary(ridge_p_rec)
+
+# model
+ridge_p_mod <- 
+  linear_reg(penalty = tune(), mixture = 0) |>
+  set_mode(mode = "regression") |>
+  set_engine(engine = "glmnet")  
+
+ridge_p_grid<-
+  grid_regular(penalty(),
+               levels = 20)
+# workflow
+ridge_p_wf <- 
+  workflow() |>
+  add_recipe(recipe = ridge_p_rec) |>
+  add_model(spec = ridge_p_mod)
+```
+
+### choose the best model
+
+```{r}
+ridge_p_resamples <-
+  ridge_p_wf |>
+  tune_grid(
+    resamples = crime_folds,
+    grid = ridge_p_grid,
+    metrics = metric_set(rmse)
+    )
+
+ridge_p_resamples |>
+  collect_metrics()
+
+top_ridge_p_models <-
+  ridge_p_resamples |>
+  show_best() |>
+  arrange(penalty) 
+
+ridge_p_resamples|>
+  select_best()
+
+ridge_p_resamples|>
+  autoplot()
+```
+
+### prediction
+
+```{r}
+set.seed(904)
+ridge_p_pre_wf <- 
+  ridge_p_wf |> 
+  finalize_workflow(select_best(ridge_p_resamples))
+
+ridge_p_pre_wf<-
+  fit(ridge_p_pre_wf, 
+      data = crime_train)
+
+ridge_p_predictions <- 
+  predict(object = ridge_p_pre_wf, 
+          new_data = crime_test)$.pred
+
+actual<-crime_test$log_property
+
+county<-crime_test$county
+
+ridge_p_predictions_df<-
+  tibble(county,actual,ridge_p_predictions)
+
+rmse_ridge_p<-rmse(ridge_p_predictions_df, actual, ridge_p_predictions)
+```
+
+## Lasso
+
+### feature and target engineering
+
+```{r}
+lasso_p_rec <- 
+  recipe(log_property ~ .,
+         data = crime_train) |>
+  update_role(county,
+              year,
+              viol,
+              viol_rate,
+              property_rate,
+              property,
+              log_viol,
+              new_role = "id") |>
+  step_impute_median(all_predictors())|>
+  step_nzv(all_predictors())|>
+  step_normalize(all_predictors())
+
+# check if feature engineering works to remove variables
+
+lasso_p_summary<-summary(lasso_p_rec)
+
+# create a model
+
+lasso_p_mod <- 
+  linear_reg(penalty = tune(), mixture = 1) |>
+  set_mode(mode = "regression") |>
+  set_engine(engine = "glmnet")  
+ 
+lasso_p_grid <-
+  grid_regular(penalty(),
+               levels = 20)
+lasso_p_wf <-
+  workflow() |>
+  add_recipe(recipe = lasso_p_rec) |>
+  add_model(spec = lasso_p_mod)
+```
+
+### choose the best model
+
+```{r}
+set.seed(904)
+lasso_p_resamples<- 
+  lasso_p_wf|>
+  tune_grid(
+    resamples = crime_folds,
+    grid = lasso_p_grid,
+    metrics = metric_set(rmse)
+    )
+
+lasso_p_resamples |>
+  collect_metrics()
+  
+top_lasso_p_models <-
+  lasso_p_resamples |>
+  show_best() |>
+  arrange(penalty) 
+
+lasso_p_resamples|>
+  select_best()
+
+lasso_p_resamples|>
+  autoplot()
+```
+
+### prediction
+
+```{r}
+set.seed(904)
+lasso_p_pre_wf <- 
+  lasso_p_wf |> 
+  finalize_workflow(select_best(lasso_p_resamples))
+
+lasso_p_pre_wf<-
+  fit(lasso_p_pre_wf, 
+      data = crime_train)
+
+lasso_p_predictions <- 
+  predict(object = lasso_p_pre_wf, 
+          new_data = crime_test)$.pred
+
+actual<-crime_test$log_property
+
+county<-crime_test$county
+
+lasso_p_predictions_df<-
+  tibble(county,actual,lasso_p_predictions)
+
+rmse_lasso_p<-rmse(lasso_p_predictions_df, actual, lasso_p_predictions)
+```
 
 ## Random Forest
 
@@ -1151,10 +1267,10 @@ county<-crime_test$county
 rf_p_predictions_df<-
   tibble(county,actual,rf_p_predictions)
 
-rmse_rf_property<-rmse(rf_p_predictions_df, actual, rf_p_predictions)
+rmse_rf_p<-rmse(rf_p_predictions_df, actual, rf_p_predictions)
 ```
 
-### Selecting the top 15 important variables
+### selecting the top 15 important variables
 
 ```{r}
 rf_p_final_wf <- 
@@ -1180,9 +1296,106 @@ rf_p_fit|>
   geom_col()
 ```
 
+Based on the result from random forest model, the top 15 important variables for predicting property crime are above Most of the variables are from the socioeconomic data and few are from the land cover data.
+
+## MARS
+
+### feature and target engineering
+
+```{r}
+# recipe
+mars_p_rec <- 
+  recipe(log_property ~ .,
+         data = crime_train) |>
+  update_role(county,
+              year,
+              viol,
+              viol_rate,
+              property_rate,
+              property,
+              log_viol,
+              new_role = "id") |>
+  step_impute_median(all_predictors())|>
+  step_nzv(all_predictors())
+
+mars_p_rec_sum<-summary(mars_p_rec)
+
+# model
+mars_p_mod <- 
+  mars(
+  num_terms = tune(), 
+  prod_degree = tune()
+) |>
+  set_mode(mode = "regression") |>
+  set_engine(engine = "earth")
+
+# tuning grid
+mars_p_grid <- 
+  grid_regular(
+  num_terms(range = c(10, 100)),
+  prod_degree(),
+  levels = 10
+)
+
+# workflow
+mars_p_wf <- 
+  workflow() |>
+  add_recipe(recipe = mars_p_rec) |>
+  add_model(spec = mars_p_mod)
+```
+
+### choose the best model
+
+```{r}
+# resample   
+set.seed(904)
+mars_p_resamples <- 
+  mars_p_wf|>
+  tune_grid(
+  resamples = crime_folds,
+  grid = mars_p_grid,
+  metrics = metric_set(rmse)
+  )
+
+collect_metrics(mars_p_resamples)
+
+top_mars_p_models <-
+  mars_p_resamples |>
+  show_best()
+
+mars_p_resamples|>
+  select_best()
+```
+
+### prediction
+
+```{r}
+set.seed(904)
+mars_p_pre_wf <- 
+  mars_p_wf |> 
+  finalize_workflow(select_best(mars_p_resamples))
+
+mars_p_pre_wf<-
+  fit(mars_p_pre_wf, 
+      data = crime_train)
+
+mars_p_predictions <- 
+  predict(object = mars_p_pre_wf, 
+          new_data = crime_test)$.pred
+
+actual<-crime_test$log_property
+
+county<-crime_test$county
+
+mars_p_predictions_df<-
+  tibble(county,actual,mars_p_predictions)
+
+rmse_mars_p<-rmse(mars_p_predictions_df, actual, mars_p_predictions)
+```
+
 ## XG Boost
 
-## feature and target engineering
+### feature and target engineering
 
 ```{r}
 xgb_p_rec <- 
@@ -1275,18 +1488,20 @@ county<-crime_test$county
 xgb_p_predictions_df<-
   tibble(county,actual,xgb_p_predictions)
 
-rmse_xgb_property<-rmse(xgb_p_predictions_df, actual, xgb_p_predictions)
+rmse_xgb_p<-rmse(xgb_p_predictions_df, actual, xgb_p_predictions)
 ```
 
 ## Final comparison of rmse
 
 ```{r}
-bind_rows(`Violent Crime Random Forest` = rmse_rf_property, 
-          `Violent Crime XG Boost`= rmse_xgb_property)
-
+bind_rows(`Violent Crime Ridge Regression`= rmse_lasso_p, 
+          `Violent Crime Lasso Regression`= rmse_ridge_p, 
+          `Violent Crime Random Forest` = rmse_rf_p, 
+          `Violent Crime MARS` = rmse_mars_p,
+          `Violent Crime XG Boost`= rmse_xgb_p)
 ```
 
-Because XG Boost has the lowest RMSE value, we will use MARS as our final model for violent crime.
+Because random forest has the lowest RMSE value, we will use random forest to predict property crime rate in 2016.
 
 # Prediction on implementation data in 2016
 
@@ -1313,8 +1528,13 @@ xgb_v_predictions_2016_df<-
   tibble(county,actual,xgb_v_predictions_2016)
 
 rmse_xgb_v_2016<-rmse(xgb_v_predictions_2016_df, actual, xgb_v_predictions_2016)
+
+rmse_xgb_v_2016
 ```
+Final prediction for violent crime rate in 2016 has a RMSE of 0.5927494.
+
 ## property crime
+
 ```{r}
 set.seed(904)
 rf_p_pre_wf_2016 <- 
@@ -1337,4 +1557,177 @@ rf_p_predictions_2016_df<-
   tibble(county,actual,rf_p_predictions_2016)
 
 rmse_rf_p_2016<-rmse(rf_p_predictions_2016_df, actual, rf_p_predictions_2016)
+
+rmse_rf_p_2016
+```
+Final prediction for property crime rate in 2016 has a RMSE of 0.4592552
+
+# Crime Rate Maps
+
+## data cleaning
+
+```{r}
+crime_09_14 <- crime_09_14|>
+  rename_all(tolower)|>
+  rename(county=stcofips)|>
+  mutate(viol = murder+rape+robbery+agasslt)|>
+  mutate(property = burglry+larceny+mvtheft)|>
+  
+  select(county, year, viol, property, cpopcrim) |>
+  mutate(viol_rate = (viol / cpopcrim) * 100000) |>
+  mutate(property_rate = (property / cpopcrim) * 100000) |>
+  
+  filter(!is.na(viol_rate) | !is.na(property_rate)) |>
+  filter(!(is.infinite(viol_rate) | is.infinite(property_rate)))
+```
+
+## extract FIPS codes
+
+```{r}
+
+crime_09_14$state_fips <- 
+  substr(crime_09_14$county, 
+         1, 2)
+
+state_fips_to_abb <- 
+  tibble(
+  state_fips = c("01", "02", "04", "05", "06", 
+                 "08", "09", "10", "11", "12", 
+                 "13", "15", "16", "17", "18", 
+                 "19", "20", "21", "22", "23", 
+                 "24", "25", "26", "27", "28", 
+                 "29", "30", "31", "32", "33", 
+                 "34", "35", "36", "37", "38", 
+                 "39", "40", "41", "42", "44", 
+                 "45", "46", "47", "48", "49", 
+                 "50", "51", "53", "54", "55", "56"),
+  state_abb = c("AL", "AK", "AZ", "AR", "CA", "CO", 
+                "CT", "DE", "DC", "FL", "GA", "HI", 
+                "ID", "IL", "IN", "IA", "KS", "KY", 
+                "LA", "ME", "MD", "MA", "MI", "MN", 
+                "MS", "MO", "MT", "NE", "NV", "NH", 
+                "NJ", "NM", "NY", "NC", "ND", "OH", 
+                "OK", "OR", "PA", "RI", "SC", "SD", 
+                "TN", "TX", "UT", "VT", "VA", "WA", 
+                "WV", "WI", "WY")
+)
+
+```
+
+## map
+
+```{r}
+
+# Convert county-level data to state-level data, aggregate violent crime data
+
+crime_data_map <- crime_09_14 |>
+  group_by(state_fips) |>
+  summarise(
+    avg_viol_rate = mean(viol_rate, na.rm = TRUE),
+    avg_property_rate = mean(property_rate, na.rm = TRUE)
+  ) |>
+  
+  left_join(state_fips_to_abb, 
+            by = 'state_fips') |>
+  
+  mutate(
+    hover_violence = paste(state_abb, 
+                           '<br>', 
+                           "Violent Crimes Rate: ", 
+                           round(avg_viol_rate, 2)),
+    hover_property = paste(state_abb, 
+                           '<br>', 
+                           "Property Crimes Rate: ", 
+                           round(avg_property_rate, 2))  
+  ) |>
+  
+  pivot_longer(
+    cols = c(avg_viol_rate, 
+             avg_property_rate),
+    names_to = "crime_type",
+    values_to = "crime_count"
+  )
+
+```
+
+## violent crime rate
+
+```{r}
+# Create and output the map for violent crime
+
+violence_map <- 
+  plot_geo(crime_data_map |>
+             filter(crime_type == "avg_viol_rate"),
+           locationmode = 'USA-states') |>
+  
+  add_trace(
+    z = ~crime_count, 
+    text = ~hover_violence,  
+    hoverinfo = 'text',     
+    locations = ~state_abb,
+    color = ~crime_count,
+    zmin = 0, 
+    zmax = 1000,
+    colors = c("#1a9641", "#ffffbf", "#fdae61", "#d7191c"),
+    colorbar = list(title = "Violent Crimes Rate",
+                    tickvals = c(250, 500, 750))
+  ) |>
+  
+  layout(
+    title = 'US Crimes Rate by State, 2009 - 2014',
+    geo = list(
+      scope = 'usa',
+      projection = list(type = 'albers usa'),
+      showlakes = TRUE,
+      lakecolor = toRGB('white')
+    )
+  )
+```
+
+## property crime rate
+
+```{r}
+# Create and output the map for property crime rate
+
+property_map <- 
+  plot_geo(crime_data_map |>
+             filter(crime_type == "avg_property_rate"),
+           locationmode = 'USA-states') |>
+  
+  add_trace(
+    z = ~crime_count, 
+    text = ~hover_property,   
+    hoverinfo = 'text',       
+    locations = ~state_abb,
+    color = ~crime_count,
+    zmin = 0, 
+    zmax = 5000,
+    colors = c("#2b83ba", "#ffffbf", "#fdae61", "#d7191c"),
+    colorbar = list(title = "Property Crimes Rate",
+                    tickvals = c(1000, 2000, 3000, 4000))
+  ) |>
+  
+  layout(
+    title = 'US Crimes Rate by State, 2009 - 2014',
+    geo = list(
+      scope = 'usa',
+      projection = list(type = 'albers usa'),
+      showlakes = TRUE,
+      lakecolor = toRGB('white')
+    )
+  )
+```
+
+## two maps together
+
+```{r}
+# Place the two maps side by side in a stacked layout
+fig <- subplot(violence_map, 
+               property_map, 
+               nrows = 2, 
+               margin = 0.05) 
+
+# Print the figure
+fig
+
 ```
