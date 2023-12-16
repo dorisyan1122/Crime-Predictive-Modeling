@@ -5,6 +5,7 @@ format: html
 editor: visual
 execute: 
   warning: false
+  cache: true
 embed-resources: true
 ---
 
@@ -19,6 +20,279 @@ library(doParallel)
 library(xgboost)
 library(vip)
 library(haven)
+library(here)
+library(icpsrdata)
+dir.create("data")
+```
+
+# Data Wrangling
+
+## Reproducible data retrieval
+
+```{r}
+options("icpsr_email" = "dy212@georgetown.edu", "icpsr_password" = "Fbp9nbmKreLsubd8nL5H")
+```
+
+### crime
+
+```{r}
+# takes 1-2 mins
+icpsr_download(
+  file_id = 38649,
+  download_dir = here("data")
+)
+
+crime<-read_dta(here("data","ICPSR_38649","DS0001","38649-0001-Data.dta"))
+```
+
+### ses
+
+```{r}
+# takes 9-10 mins
+icpsr_download(
+  file_id = 38528,
+  download_dir = here("data")
+)
+
+ses08_17<-read_dta(here("data","ICPSR_38528","DS0002","38528-0002-Data.dta"))
+```
+
+### school counts
+
+```{r}
+# takes 1-2 mins
+icpsr_download(
+  file_id = 38569,
+  download_dir = here("data")
+)
+
+schoolct<-read_dta(here("data","ICPSR_38569","DS0001","38569-0001-Data.dta"))
+```
+
+### the number of parks
+
+```{r}
+# takes 1-2 mins
+icpsr_download(
+  file_id = 38586,
+  download_dir = here("data")
+)
+
+parks<-read_dta(here("data","ICPSR_38586","DS0001","38586-0001-Data.dta"))
+```
+
+### street connectivity
+
+```{r}
+# takes 1-2 mins
+icpsr_download(
+  file_id = 38580,
+  download_dir = here("data")
+)
+
+streetcon<-read_dta(here("data","ICPSR_38580","DS0001","38580-0001-Data.dta"))
+```
+
+### pollution
+
+```{r}
+# takes 1 min
+icpsr_download(
+  file_id = 38597,
+  download_dir = here("data")
+)
+
+pollution<-read_dta(here("data","ICPSR_38597","DS0001","38597-0001-Data.dta"))
+```
+
+### urbanicity
+
+```{r}
+# takes 1 min
+icpsr_download(
+  file_id = 38606,
+  download_dir = here("data")
+)
+
+urban<-read_dta(here("data","ICPSR_38606","DS0001","38606-0001-Data.dta"))
+```
+
+### land cover
+
+```{r}
+# takes 1-2 min
+icpsr_download(
+  file_id = 38598,
+  download_dir = here("data")
+)
+
+landcover<-read_dta(here("data","ICPSR_38598","DS0001","38598-0001-Data.dta"))
+```
+
+### road system
+
+```{r}
+# takes 1-2 min
+icpsr_download(
+  file_id = 38585,
+  download_dir = here("data")
+)
+
+road<-read_dta(here("data","ICPSR_38585","DS0001","38585-0001-Data.dta"))
+```
+
+## Clean data
+
+### crime
+
+```{r}
+# crime data at 2013
+crime_data<-crime|>
+  rename_all(tolower)|>
+  rename(county=stcofips)|>
+  select(county,year,viol,property,cpopcrim)
+
+crime_2013<-crime_data|>
+  filter(year == 2013)
+```
+
+```{r}
+clean_data<-
+  function(data) {
+    cleaned_data <- data |> 
+      rename_all(tolower)|>
+      mutate(county = substr((tract_fips10), 1, 5))|>
+      select(-tract_fips10)
+
+  return(cleaned_data)
+}
+```
+
+### ses
+
+```{r}
+#  ACS five-year estimate 2013-2017
+ses_2013<-clean_data(ses08_17)|>
+  group_by(county)|>
+  summarise_all(sum, na.rm = TRUE)|>
+  pivot_longer(
+  cols = !county, 
+  names_to = "indicator",
+  values_to = "value"
+  )|>
+  filter(str_sub(indicator, -2) == "17")|>
+  # pivot SES indicators back as variables
+  pivot_wider(
+    names_from = indicator,
+    values_from = value
+  )
+```
+
+### school counts
+
+```{r}
+# school counts at 2013
+schoolct_2013<-clean_data(schoolct)|>
+  group_by(county,year)|>
+  summarise_all(sum, na.rm = TRUE)|>
+  filter(year == 2013)
+```
+
+### parks
+
+```{r}
+# from 2010 decennial census
+parks_2013<-clean_data(parks)|>
+  group_by(county)|>
+  summarise_all(sum, na.rm = TRUE)
+```
+
+### street connectivity
+
+```{r}
+# from 2010 decennial census
+streetcon_2013<-clean_data(streetcon)|>
+  group_by(county)|>
+  summarise_all(sum, na.rm = TRUE)
+```
+
+### pollution
+
+```{r}
+# pollution in 2013
+pollution_2013<-clean_data(pollution)|>
+  group_by(county,year)|>
+  summarise_all(sum, na.rm = TRUE)|>
+  filter(year == 2013)
+```
+
+### urbanicity
+
+```{r}
+# from 2010 decennial census
+urban_2013<-clean_data(urban)|>
+  group_by(county)|>
+  summarise_all(sum, na.rm = TRUE)
+```
+
+### land cover
+
+```{r}
+# from 2010 decennial census
+landcover_2013<-landcover|>
+  rename_all(tolower)|>
+  mutate(county = substr((tract_fips), 1, 5))|>
+  select(-tract_fips)|>
+  group_by(county, year_intp)|>
+  summarise_all(sum, na.rm = TRUE) |>
+  filter(year_intp == 2013)
+```
+
+### road system
+
+```{r}
+# from 2010 decennial census
+road_2013<-clean_data(road)|>
+  group_by(county)|>
+  summarise_all(sum, na.rm = TRUE)
+```
+
+# Combine All Datasets
+
+```{r}
+# combine the data sets with the by "county" and "year" columns
+crime_all <- full_join(
+  crime_2013,
+  full_join(
+    ses_2013,
+   full_join(
+     schoolct_2013,
+    full_join(
+      parks_2013,
+      full_join(
+        streetcon_2013,
+          full_join(
+            pollution_2013, 
+            full_join(
+              urban_2013,
+              full_join(
+                landcover_2013, road_2013, by = "county")
+              ),
+            by = "county"
+            ),
+          by = "county"
+          ),
+        by = "county"
+        ),
+      by = "county"
+      ),
+    by = "county"
+    ),
+   by = "county"
+  )
+
+crime_all<-crime_all|>
+  select(-year.y, -year.x, -year_intp)
 ```
 
 # EDA and Data cleaning
@@ -27,22 +301,25 @@ library(haven)
 # remove STATA attributes
 attr(crime_all$viol, "format.stata") <- NULL
 attr(crime_all$property, "format.stata") <- NULL
+attr(crime_all$cpopcrim, "format.stata") <- NULL
 
 attr(crime_all$viol, "label") <- NULL
 attr(crime_all$property, "label") <- NULL
+attr(crime_all$cpopcrim, "label") <- NULL
  
 str(crime_all)
 
 # generate log(violent crime) and log (property crime)
 crime_all_cleaned <- crime_all|>
   # generate crime rate per 100,000 people and the log value of it
-  mutate(log_viol = log((viol / totpop13_17) * 100000),
-       log_property = log((property / totpop13_17) * 100000)) |>
+  mutate(log_viol = log((viol / cpopcrim) * 100000),
+       log_property = log((property / cpopcrim) * 100000)) |>
   filter(!is.na(log_viol) & !is.na(log_property)) |>
   filter(!(is.infinite(log_viol) | is.infinite(log_property)))|>
-  # tot_pop_census and totpop13_17 are both total population estimate. tot_pop_census is from urbanicity dataset, totpop13_17 is from ses dataset. 
-  # considering that the ses dataset is ACS 5-year estimate, thus more accurate, we will use totpop13_17 as population estimate
-  select(-tot_pop_census)
+  # cpopcrim, tot_pop_census, and totpop13_17 are all total population estimate. cpopcrim is from crime dataset, tot_pop_census is from urbanicity dataset, totpop13_17 is from ses dataset. 
+  # since we are predicting crime rate, it would be more appropriate to use the population variable in the crime dataset, thus we will use cpopcrim as population estimate
+  select(-tot_pop_census,
+         -totpop13_17)
 
 # explore missing values
 missing_values <- colSums(is.na(crime_all_cleaned))
@@ -299,26 +576,61 @@ rf_v_fit <-
   rf_v_final_wf |>
   fit(data = crime_all_cleaned)
 
-violent_labels <- c(
-  disadvantage2_13_17 = "Mean of pfhfam ppubas ppov punemp",
+crime_labels <- c(
+  pnhblack13_17 = "Proportion of people non-Hispanic Black",
+  pin1b_13_17 = "Proportion of families with Income less than 15K",
   disadvantage13_17 = "Mean of pnhblack pfhfam ppubas ppov punemp",
-  pfhfam13_17 = "Prop. female-headed families w/ kids",
-  totpop13_17 = "Total population",
-  pnvmar13_17 = "Proportion 15+ Never Married",
-  ppov13_17 = "Proportion w/ income past 12 months below poverty level",
-  p18yr_13_17 = "Proportion under 18",
-  p30_3913_17 = "Proportion 30-39 year-old",
-  p18_2913_17 = "Proportion 18-29 year-old",
-  pin2b_13_17 = "Prop. of families with Income 15-30K",
-  pin3b_13_17 = "Prop. of families with Income 30-50K",
-  tot_pop_ruca = "Tract total population",
-  gamma = "GAMMA index",
-  punemp13_17 = "Proportion 16+ civ labor force unemployed",
-  ped1_13_17 = "Prop. w/ Less than High School Diploma",
+  ppov13_17 = "Prop. ppl w/ income past 12 months below poverty level",
+  ped1_13_17 = "Prop. w/ less than high school diploma",
+  pfhfam13_17 = "Proportion female-headed families w/ kids",
+  pin2b_13_17 = "Proportion of families with Income 15-30K",
+  prop_value_52 = "Prop. Shrub/Scrub (sqm)",
+  value_52 = "Shrub/Scrub (sqm)",
   ppubas13_17 = "Prop. of households with public assistance income",
-  connoderatio = "Connected node ratio",
-  linknoderatio = "Link node ratio",
-  urbanicity = "Three-category urbanicity variable"
+  disadvantage2_13_17 = "Mean of pfhfam ppubas ppov punemp",
+  prop_value_41 = "Prop. Deciduous Forest (sqm)",
+  value_41 = "Deciduous Forest (sqm)",
+  phispanic13_17 = "Proportion of people of Hispanic origin",
+  pnwhite13_17 = "Proportion of people non-Hispanic White",
+  cpopcrim = "County population", 
+  ethnicimmigrant13_17 = "Mean of phispanic pfborn",
+  value_71 = "Herbaceuous (sqm)", 
+  prop_strlen_secondary = "Prop. secondary road length",
+  punemp13_17 = "Prop. 16+ civ labor force unemployed",
+  value_90 = "Woody Wetlands (sqm)", 
+  tract_area_sqmiles = "Census tract area (square miles)", 
+  sum_strlen_secondary = "Total length of secondary roads",
+  prop_prim_sec_roads = "Proportion of primary or secondary roads",
+  value_81 = "Woody Wetlands (sqm)",
+  pfborn13_17 = "Proportion of people who are foreign born",
+  pin3b_13_17 = "Proportion of families with Income 30-50K",
+  prop_secondary_roads = "Proportion of secondary roads",
+  pnhwhite13_17 = "Proportion of people non-Hispanic White",
+  value_82 = "Cultivated Crops (sqm)",
+  sum_strlen_prim_sec = "Total length of primary or secondary roads",
+  pnvmar13_17 = "Proportion of People 15+ Never Married",
+  rural_pop = "Total rural population",
+  pincgt75k13_17 = "Proportion of families with Income greater than 75K",
+  urban_pop = "Total urban population",
+  tract_urban_pct = "Proportion of tract population within urban areas",
+  prop_value_23 = "Prop. Developed, Medium Intensity (sqm)",
+  popden13_17 = "Persons per square mile",
+  prop_value_21 = "Prop. Developed, Open Space (sqm)",
+  value_24 = "Developed, High Intensity (sqm)",
+  prop_value_24 = "Prop. Developed, High Intensity (sqm)",
+  pop_density = "Population density (square miles)",
+  prop_value_22 = "Prop. Developed, Low Intensity (sqm)",
+  prop_value_42 = "Prop. Evergreen Forest (sqm)",
+  p18_2913_17 = "Proportion of population 18-29 years of age",
+  strntdensity = "Street network density",
+  prop_value_90 = "Prop. Woody Wetlands (sqm)",
+  value_42 = "Evergreen Forest (sqm)",
+  prop_value_43 = "Prop. Mixed Forest (sqm)",
+  prop_value_71 = "Prop. Herbaceuous (sqm)",
+  pfborn13_17 = "Proportion of people who are foreign born",
+  strnetdensity = "Street network density",
+  blockdensity = "Block density",
+  tract_area_sqmiles.y = "Census tract area (sqm)"
 )
 
 rf_v_fit|>
@@ -330,13 +642,9 @@ rf_v_fit|>
     Variable = fct_reorder(.x = Importance, .f = Variable)
   ) |>
   ggplot(aes(Importance, Variable)) +
-  scale_y_discrete(labels = violent_labels) +
-  labs(title = "Top 30 Important Variables for Violent Crime Prediction") +
+  scale_y_discrete(labels = crime_labels) +
+  labs(title = "Top 30 Variables for Violent Crime Prediction") +
   geom_col()
-
-# every variable ending with 13_17 are SES indicators
-# linknoderatio, conNodeRatio and gamma are street connectivity indicators
-# tot_pop_ruca and urbanicity are in urbanicity indicators
 ```
 
 ## Linear Regression
@@ -737,7 +1045,7 @@ select_best(rf_p_resamples)
 autoplot(rf_p_resamples)
 ```
 
-### Selecting the top 25 important variables
+### Selecting the top 30 important variables
 
 ```{r}
 rf_p_final_wf <- 
@@ -748,46 +1056,18 @@ rf_p_fit <-
   rf_p_final_wf |>
   fit(data = crime_all_cleaned)
 
-property_labels <- c(
-  totpop13_17 = "Total population",
-  p30_3913_17 = "Proportion 30-39 year-old",
-  gamma = "Gamma index",
-  tot_pop_ruca = "Tract total population",
-  linknoderatio = "Link/node ratio",
-  p18yr_13_17 = "Proportion under 18",
-  pnvmar13_17 = "Proportion 15+ Never Married",
-  p18_2913_17 = "Proportion 18-29 year-old",
-  pfhfam13_17 = "Prop. female-headed families w/ kids",
-  pprof13_17 = "Prop. employd civ 16+ mgmt/bus/sci/arts",
-  connoderatio = "Connected node ratio",
-  urbanicity = "Three-category urbanicity variable",
-  pin3b_13_17 = "Prop. of families with Income 30-50K",
-  urban_pop = "Total urban population",
-  disadvantage2_13_17 = "Mean of pfhfam ppubas ppov punemp",
-  ped2_13_17 = "Prop. with High School Diploma and/or avove",
-  ppov13_17 = "Prop. w/ income past 12 months below poverty level",
-  year_intp = "NLCD year, interpolated",
-  pin2b_13_17 = "Prop. of families with Income 15-30K",
-  p40_4913_17 = "Proportion 40-49 year-old"
-)
-
 rf_p_fit|>
   extract_fit_parsnip()|>
-  vip(num_features = 20) %>%
+  vip(num_features = 30) %>%
   .$data |>
   mutate(
     Importance = Importance / max(Importance),
     Variable = fct_reorder(.x = Importance, .f = Variable)
   ) |>
   ggplot(aes(Importance, Variable)) +
-  scale_y_discrete(labels = property_labels) +
-  labs(title = "Top 20 Important Variables for Property Crime Prediction") +
+  scale_y_discrete(labels = crime_labels) +
+  labs(title = "Top 30 Variables for Property Crime Prediction") +
   geom_col()
-
-# every variable ending with 13_17 are SES indicators
-# linknoderatio, conNodeRatio and gamma are street connectivity indicators
-# top_pop_ruca, urban_pop and urbanicity are in urbanicity indicators
-# year_intp is land cover indicator
 ```
 
 ## Linear Regression
