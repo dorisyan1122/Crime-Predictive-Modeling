@@ -1,5 +1,5 @@
 # PPOL6819 Final Project
-Predictive Modeling of County-level Crime Rate
+Topic: Predictive Modeling of County-level Crime Rate
 Ziwen Lu, Xuyan Xiu, Doris Yan's final project
 
 [Documentation](https://dorisyan1122.github.io/PPOL6819-Final-Project/final-write-up) 
