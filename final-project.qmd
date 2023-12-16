@@ -1,15 +1,18 @@
 ---
 title: "Final Project"
 author: "Ziwen Lu, Xuyan Xiu, Doris Yan"
-format: html
+format: 
+  html:
+    embed-resources: true
+    code-fold: true
+    theme: united
 editor: visual
 execute: 
   warning: false
   cache: true
-embed-resources: true
 ---
 
-```{r load packages, echo=FALSE}
+```{r load packages, output=FALSE}
 library(tidyverse)
 library(tidymodels)
 library(ggplot2)
@@ -84,9 +87,6 @@ crime_predictive<-read_dta(here("data","ICPSR_38649","DS0001","38649-0001-Data.d
 
 # crime implementation data
 crime_implementation<-read_dta(here("data","ICPSR_37059","DS0004","37059-0004-Data.dta"))
-
-# crime map data
-crime_09_14 <- read_dta(here("data","ICPSR_38649", "DS0001", "38649-0001-Data.dta"))
 
 # ses predictive data and implementation data
 ses08_17<-read_dta(here("data","ICPSR_38528","DS0002","38528-0002-Data.dta"))
@@ -786,7 +786,7 @@ Based on the result from random forest model, the top 15 important variables for
 
 Disadvantage1 is the mean of proportion of people Non-Hispanic Black, proportion female-headed families with kids, proportion of households with public assistance income, proportion people with income past 12 months below poverty level, and proportion 16+ civilian labor force unemployed.
 
-Disadvantage2 is the mean of proportion female-headed families with kids, proportion of households with public assistance income, proportion people with income past 12 months below poverty level, and  proportion 16+ civilian labor force unemployed.
+Disadvantage2 is the mean of proportion female-headed families with kids, proportion of households with public assistance income, proportion people with income past 12 months below poverty level, and proportion 16+ civilian labor force unemployed.
 
 ## MARS
 
@@ -985,14 +985,44 @@ rmse_xgb_v<-rmse(xgb_v_predictions_df, actual, xgb_v_predictions)
 ## Final comparison of rmse
 
 ```{r}
-bind_rows(`Violent Crime Ridge regression`= rmse_lasso_v, 
-          `Violent Crime Lasso regression`= rmse_ridge_v, 
-          `Violent Crime Random Forest` = rmse_rf_v, 
-          `Violent Crime MARS` = rmse_mars_v,
-          `Violent Crime XG Boost`= rmse_xgb_v)
+violence_comparison<-bind_rows(rmse_ridge_v, rmse_lasso_v, rmse_rf_v, rmse_mars_v, rmse_xgb_v)
+
+violence_comparison|>
+  mutate(model = c("Ridge Regression","Lasso Regression", "Random Forest", "MARS", "XG Boost"))|>
+  select(model, everything())
 ```
 
 Because XG Boost has the lowest RMSE value, we will use XG boost to predict violent crime rate in 2016.
+
+## Prediction on implementation violent crime data in 2016
+
+```{r}
+set.seed(904)
+xgb_v_pre_wf_2016 <- 
+  xgb_v_wf |> 
+  finalize_workflow(select_best(xgb_v_resamples))
+
+xgb_v_pre_wf_2016<-
+  fit(xgb_v_pre_wf, 
+      data = crime_all_2010_cleaned)
+
+xgb_v_predictions_2016 <- 
+  predict(object = xgb_v_pre_wf_2016, 
+          new_data = crime_all_2016_cleaned)$.pred
+
+actual_implement_v<-crime_all_2016_cleaned$log_viol
+
+county_implement<-crime_all_2016_cleaned$county
+
+xgb_v_predictions_2016_df<-
+  tibble(county_implement,actual_implement_v,xgb_v_predictions_2016)
+
+rmse_xgb_v_2016<-rmse(xgb_v_predictions_2016_df, actual_implement_v, xgb_v_predictions_2016)
+
+rmse_xgb_v_2016
+```
+
+Final prediction for violent crime rate in 2016 has a RMSE of 0.5927494.
 
 # Property Crime
 
@@ -1078,14 +1108,14 @@ ridge_p_predictions <-
   predict(object = ridge_p_pre_wf, 
           new_data = crime_test)$.pred
 
-actual<-crime_test$log_property
+actual_p<-crime_test$log_property
 
 county<-crime_test$county
 
 ridge_p_predictions_df<-
-  tibble(county,actual,ridge_p_predictions)
+  tibble(county,actual_p,ridge_p_predictions)
 
-rmse_ridge_p<-rmse(ridge_p_predictions_df, actual, ridge_p_predictions)
+rmse_ridge_p<-rmse(ridge_p_predictions_df, actual_p, ridge_p_predictions)
 ```
 
 ## Lasso
@@ -1171,14 +1201,14 @@ lasso_p_predictions <-
   predict(object = lasso_p_pre_wf, 
           new_data = crime_test)$.pred
 
-actual<-crime_test$log_property
+actual_p<-crime_test$log_property
 
 county<-crime_test$county
 
 lasso_p_predictions_df<-
-  tibble(county,actual,lasso_p_predictions)
+  tibble(county,actual_p,lasso_p_predictions)
 
-rmse_lasso_p<-rmse(lasso_p_predictions_df, actual, lasso_p_predictions)
+rmse_lasso_p<-rmse(lasso_p_predictions_df, actual_p, lasso_p_predictions)
 ```
 
 ## Random Forest
@@ -1260,14 +1290,14 @@ rf_p_predictions <-
   predict(object = rf_p_pre_wf, 
           new_data = crime_test)$.pred
 
-actual<-crime_test$log_property
+actual_p<-crime_test$log_property
 
 county<-crime_test$county
 
 rf_p_predictions_df<-
-  tibble(county,actual,rf_p_predictions)
+  tibble(county,actual_p,rf_p_predictions)
 
-rmse_rf_p<-rmse(rf_p_predictions_df, actual, rf_p_predictions)
+rmse_rf_p<-rmse(rf_p_predictions_df, actual_p, rf_p_predictions)
 ```
 
 ### selecting the top 15 important variables
@@ -1296,7 +1326,7 @@ rf_p_fit|>
   geom_col()
 ```
 
-Based on the result from random forest model, the top 15 important variables for predicting property crime are above Most of the variables are from the socioeconomic data and few are from the land cover data.
+Based on the result from random forest model, the top 15 important variables for predicting property crime are shown above. Most of the variables are from the socioeconomic data and few are from the land cover data.
 
 ## MARS
 
@@ -1383,14 +1413,14 @@ mars_p_predictions <-
   predict(object = mars_p_pre_wf, 
           new_data = crime_test)$.pred
 
-actual<-crime_test$log_property
+actual_p<-crime_test$log_property
 
 county<-crime_test$county
 
 mars_p_predictions_df<-
-  tibble(county,actual,mars_p_predictions)
+  tibble(county,actual_p,mars_p_predictions)
 
-rmse_mars_p<-rmse(mars_p_predictions_df, actual, mars_p_predictions)
+rmse_mars_p<-rmse(mars_p_predictions_df, actual_p, mars_p_predictions)
 ```
 
 ## XG Boost
@@ -1481,59 +1511,29 @@ xgb_p_predictions <-
   predict(object = xgb_p_pre_wf, 
           new_data = crime_test)$.pred
 
-actual<-crime_test$log_property
+actual_p<-crime_test$log_property
 
 county<-crime_test$county
 
 xgb_p_predictions_df<-
-  tibble(county,actual,xgb_p_predictions)
+  tibble(county,actual_p,xgb_p_predictions)
 
-rmse_xgb_p<-rmse(xgb_p_predictions_df, actual, xgb_p_predictions)
+rmse_xgb_p<-rmse(xgb_p_predictions_df, actual_p, xgb_p_predictions)
 ```
 
 ## Final comparison of rmse
 
 ```{r}
-bind_rows(`Violent Crime Ridge Regression`= rmse_lasso_p, 
-          `Violent Crime Lasso Regression`= rmse_ridge_p, 
-          `Violent Crime Random Forest` = rmse_rf_p, 
-          `Violent Crime MARS` = rmse_mars_p,
-          `Violent Crime XG Boost`= rmse_xgb_p)
+property_comparison<-bind_rows(rmse_ridge_p, rmse_lasso_p, rmse_rf_p, rmse_mars_p, rmse_xgb_p)
+
+property_comparison|>
+  mutate(model = c("Ridge Regression","Lasso Regression", "Random Forest", "MARS", "XG Boost"))|>
+  select(model, everything())
 ```
 
 Because random forest has the lowest RMSE value, we will use random forest to predict property crime rate in 2016.
 
-# Prediction on implementation data in 2016
-
-## violent crime
-```{r}
-set.seed(904)
-xgb_v_pre_wf_2016 <- 
-  xgb_v_wf |> 
-  finalize_workflow(select_best(xgb_v_resamples))
-
-xgb_v_pre_wf_2016<-
-  fit(xgb_v_pre_wf, 
-      data = crime_all_2010_cleaned)
-
-xgb_v_predictions_2016 <- 
-  predict(object = xgb_v_pre_wf_2016, 
-          new_data = crime_all_2016_cleaned)$.pred
-
-actual<-crime_all_2016_cleaned$log_viol
-
-county<-crime_all_2016_cleaned$county
-
-xgb_v_predictions_2016_df<-
-  tibble(county,actual,xgb_v_predictions_2016)
-
-rmse_xgb_v_2016<-rmse(xgb_v_predictions_2016_df, actual, xgb_v_predictions_2016)
-
-rmse_xgb_v_2016
-```
-Final prediction for violent crime rate in 2016 has a RMSE of 0.5927494.
-
-## property crime
+## Prediction on implementation property crime data in 2016
 
 ```{r}
 set.seed(904)
@@ -1549,17 +1549,18 @@ rf_p_predictions_2016 <-
   predict(object = rf_p_pre_wf_2016, 
           new_data = crime_all_2016_cleaned)$.pred
 
-actual<-crime_all_2016_cleaned$log_property
+actual_implement_p<-crime_all_2016_cleaned$log_property
 
-county<-crime_all_2016_cleaned$county
+county_implement<-crime_all_2016_cleaned$county
 
 rf_p_predictions_2016_df<-
-  tibble(county,actual,rf_p_predictions_2016)
+  tibble(county_implement,actual_implement_p,rf_p_predictions_2016)
 
-rmse_rf_p_2016<-rmse(rf_p_predictions_2016_df, actual, rf_p_predictions_2016)
+rmse_rf_p_2016<-rmse(rf_p_predictions_2016_df, actual_implement_p, rf_p_predictions_2016)
 
 rmse_rf_p_2016
 ```
+
 Final prediction for property crime rate in 2016 has a RMSE of 0.4592552
 
 # Crime Rate Maps
@@ -1567,7 +1568,7 @@ Final prediction for property crime rate in 2016 has a RMSE of 0.4592552
 ## data cleaning
 
 ```{r}
-crime_09_14 <- crime_09_14|>
+crime_09_14 <- crime_predictive|>
   rename_all(tolower)|>
   rename(county=stcofips)|>
   mutate(viol = murder+rape+robbery+agasslt)|>
@@ -1708,7 +1709,7 @@ property_map <-
   ) |>
   
   layout(
-    title = 'US Crimes Rate by State, 2009 - 2014',
+    title = 'Avergae US Crimes Rate by State, 2009 - 2014',
     geo = list(
       scope = 'usa',
       projection = list(type = 'albers usa'),
