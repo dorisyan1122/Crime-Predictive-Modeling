@@ -6,4 +6,6 @@ editor: visual
 
 This is our final Project.
 
-[Python](https://plot.ly/python/map-subplots-and-small-multiples/) 
+[map](https://dorisyan1122.github.io/PPOL6819-Final-Project/map) 
+
+[clean](https://dorisyan1122.github.io/PPOL6819-Final-Project/clean)
