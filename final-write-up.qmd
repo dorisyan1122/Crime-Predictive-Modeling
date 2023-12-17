@@ -32,8 +32,8 @@ There are a few steps in data cleaning.
 1.  The unit of analysis in the crime data is county, identified by the 5-digit FIPS county code, whereas the unit of analysis for all predictors are is sub-county area, identified by 11-digit Census Tract FIPS code. Thus, for the socioeconomic status and urban planning predictors, we first sum up the sub-county area with the same first 5-digit FIPS code together. Then, we merge the socioeconomic status and urban planning data with the crime data by the shared 5-digit FIPS code.
 2.  We remove duplicate variables. For example, crime and socioeconomic data all have variables for population. However, since we are predicting crime, it would be more appropriate to use the population variable in the crime data, so we drop the population variable in the socioeconomic data. We also intent to drop the value with more than 50% missing values, but after exploring the data, we found no variable has more than 50% missing values.
 3.  We think it would be more appropriate to measure crime rate instead of the number of crime in each county because a county with more population would have more crimes. Measuring crime rate thus eliminates population as a strong predictor. Therefore, we generate a new variable for crime rate, which is the number of crime per 100,000 people. We use crime rate to map the average crime rate from 2002 to 2014.
-4.  The 2010 data shows that violent crime rate ranges from 9 to 2361, and property crime rate ranges from 31 to 8853. Given the large variation in crime rate, we performed a log-transformation for crime rate to reduce the variability and skewness of data.
-5.  After transforming census tract to county for the predictors, we filter by year. Predictive data is from 2010. Implementation data is from 2016. School counts, pollution, and land connectivity are all annual measures. We use ACS 5-year estimate of socioeconomic indicators from 2008-2012 on the modeling year 2010, ACS 5-year estimate of socioeconomic indicators from 2013-2017 on the implementation year 2016. We use street connectivity in 2010 on the modeling year 2010, and we use street connectivity in 2020 in the modeling year 2016, assuming street connectivity does not change significantly from 2016 to 2020.
+4.  The 2010 data shows that violent crime rate ranges from 9 to 2361, and property crime rate ranges from 31 to 8853. Given the large variation in crime rate, we performed a log transformation for crime rate to reduce the variability and skewness of data.
+5.  After transforming census tract to county for the predictors, we filter by year. Predictive data is from 2010. Implementation data is from 2016. School counts, pollution, and land connectivity are all annual measures. We use ACS 5-year estimate of socioeconomic indicators from 2008-2012 on the modeling year 2010, ACS 5-year estimate of socioeconomic indicators from 2013-2017 on the implementation year 2016. We use street connectivity in 2010 on the modeling year 2010, and we use street connectivity in 2020 in the modeling year 2016, assuming street connectivity does not change significantly from 2016 to 2020. In total, we have 106 predictor variables.
 
 ## Models
 
@@ -67,13 +67,13 @@ For property crime, the top three important variables are *Disadvantage1, Propor
 
 For violent crime prediction, XG Boost has the lowest RMSE. Thus we use this model to predict the violent crime rate in 2016. Our final model fore predicting violent crime rate in 2016 has a RMSE of 0.593.
 
-For property crime prediction, Random Forest has the lowest RMSE. Thus we use this model to predict the property crime rate in 2016. Our final model fore predicting property crime rate in 2016 has a RMSE of 0.459.
+For property crime prediction, Random Forest has the lowest RMSE. Thus we use this model to predict the property crime rate in 2016. Our final model fore predicting property crime rate in 2016 has a RMSE of 0.459. The unit of RMSE is logarithm of crime rate per 100,000 people.
 
 # Discussion
 
-It makes sense that social economic indicators characterize the outlook of both violent and property crimes. The important variables of both types of crime fall into the economic disadvantage category. Therefore, it is important to target crime prevention effort to areas that are poverty-stricken. Meanwhile, the local governments need to create programs that stimulate racial and ethnic-inclusive economic growth, such as employment program to reduce unemployment rate. Our model allows us to understand the community characteristics of violent crime rate and property crime rate.
+It makes sense that social economic and demographic indicators mostly characterize the outlook of both violent and property crimes. The important variables of both types of crime fall into the economic disadvantage category. Therefore, it is important to target crime prevention effort to areas that are poverty-stricken. Meanwhile, the local governments need to create programs that stimulate racial and ethnic-inclusive economic growth, such as employment program to reduce unemployment rate. Our model allows us to understand the community characteristics of violent crime rate and property crime rate.
 
-Our models are robust to predict the unseen data. Applying our model of violent crime rate on the implementation data in 2016 generates RMSE of 0.593, which means the average difference between our model's predicted values and the actual values is 0.593. Similarly, for property crime rate, the average difference between our model's predicted values and the actual values is 0.459.
+Our models are robust to predict the unseen data. Applying our model of violent crime rate on the implementation data in 2016 generates RMSE of 0.593, which means the average difference between our model's predicted values and the actual values is 0.593. Similarly, for property crime rate, the average difference between our model's predicted values and the actual values is 0.459. Meanwhile, it is critical to note that the unit of RMSE is logarithm of crime rate per 100,000 people, not crime rate.
 
 # Limitation
 
@@ -81,6 +81,6 @@ One of the limitations to our approach is that we assume use street connectivity
 
 Additionally, it is uncertain that our covariates of choice outline the entirety of crime rate prediction, because crime is a complicated social issue that implicates many other factors. For example, aside from community characteristics, @goin2018 also include the number the alcohol outlets and climate. It is possible that with more predictors, our models can have better performance.
 
-For convenience we log transform crime rate, but to get a more informative result for policymakers, it may be better to transform log back to crime rate so that it is easier to interpret.
+The unit of RMSE is logarithm of crime rate per 100,000 people. For convenience we log transform crime rate, but to get a more informative result for policymakers, it may be better to transform log back to crime rate so that it is easier to interpret.
 
 # 
