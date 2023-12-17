@@ -4,7 +4,7 @@ This is Ziwen Lu, Xuyan Xiu, and Doris Yan's final project. Please click on [Git
 Our project contains four parts: 
 
 1. full paper "write-up", including introduction, model and methods, results and limitations of our project;
-2. geospatial mapping of average crime rate from 2009 to 2014;
+2. geospatial mapping of average crime rate from 2002 to 2014;
 3. predictive modeling of 2010 crime rate on 2016 crime rate;
 4. slides for presentation.
 
