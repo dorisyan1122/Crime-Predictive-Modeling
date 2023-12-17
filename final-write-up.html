@@ -3061,7 +3061,7 @@ vertical-align: -.125em;
 </section>
 <section id="metric-selection" class="level2">
 <h2 class="anchored" data-anchor-id="metric-selection">Metric Selection</h2>
-<p>Because we want to make predictions and see how well our model perform, we decided to use RMSE as our metric.</p>
+<p>Because we want to make predictions and see how well our models perform, we decided to use RMSE as our metric.</p>
 </section>
 <section id="implementation" class="level2">
 <h2 class="anchored" data-anchor-id="implementation">Implementation</h2>
@@ -3093,6 +3093,7 @@ vertical-align: -.125em;
 <h1>Limitation</h1>
 <p>One of the limitations to our approach is that we assume use street connectivity in 2020 on our implementation year 2016, as we assume street connectivity does not vary significantly between 2016 and 2020.</p>
 <p>Additionally, it is uncertain that our covariates of choice outline the entirety of crime rate prediction, because crime is a complicated social issue that implicates many other factors. For example, aside from community characteristics, <span class="citation" data-cites="goin2018">Goin, Rudolph, and Ahern (<a href="#ref-goin2018" role="doc-biblioref">2018</a>)</span> also include the number the alcohol outlets and climate. It is possible that with more predictors, our models can have better performance.</p>
+<p>For convenience we log transform crime rate, but to get a more informative result for policymakers, it may be better to transform log back to crime rate so that it is easier to interpret.</p>
 </section>
 <section id="section" class="level1 unnumbered">
 

@@ -43,7 +43,7 @@ For all five models, we replace missing values in all predictor variables with t
 
 ## Metric Selection
 
-Because we want to make predictions and see how well our model perform, we decided to use RMSE as our metric.
+Because we want to make predictions and see how well our models perform, we decided to use RMSE as our metric.
 
 ## Implementation
 
@@ -80,5 +80,7 @@ Our models are robust to predict the unseen data. Applying our model of violent 
 One of the limitations to our approach is that we assume use street connectivity in 2020 on our implementation year 2016, as we assume street connectivity does not vary significantly between 2016 and 2020.
 
 Additionally, it is uncertain that our covariates of choice outline the entirety of crime rate prediction, because crime is a complicated social issue that implicates many other factors. For example, aside from community characteristics, @goin2018 also include the number the alcohol outlets and climate. It is possible that with more predictors, our models can have better performance.
+
+For convenience we log transform crime rate, but to get a more informative result for policymakers, it may be better to transform log back to crime rate so that it is easier to interpret.
 
 # 
