@@ -32,13 +32,18 @@ dir.create("data")
 
 # Data Wrangling
 
+## ICPSR credential 
+
+```{r, echo=FALSE}
+
+options("icpsr_email" = "input email address", 
+        "icpsr_password" = "input password")
+```
+
 ## Reproducible data retrieval
 
+
 ```{r}
-
-options("icpsr_email" = "dy212@georgetown.edu", 
-        "icpsr_password" = "Fbp9nbmKreLsubd8nL5H")
-
 # crime predictive data takes 1-2 mins
 
 icpsr_download(
