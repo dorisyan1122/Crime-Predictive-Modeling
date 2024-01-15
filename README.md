@@ -1,5 +1,5 @@
 # PPOL-6819 Final Project: Predictive Modeling of County-level Crime Rate
-This is Ziwen Lu, Xuyan Xiu, and Doris Yan's machine learning project to predict 2016 crime rate using 2010 as the modeling year, and we compare the actual 2016 crime data with our predictions. Please click on [GitHub Pages](https://dorisyan1122.github.io/Crime-Predivtive-Modeling/) for details. 
+This is Ziwen Lu, Xuyan Xiu, and Doris Yan's machine learning project to predict 2016 crime rate using 2010 as the modeling year, and we compare the actual 2016 crime data with our predictions. Please click on [GitHub Pages](https://dorisyan1122.github.io/Crime-Predictive-Modeling/) for details. 
 
 Our project contains four parts: 
 
