@@ -34,7 +34,7 @@ dir.create("data")
 
 ## ICPSR credential 
 
-```{r, echo=FALSE}
+```{r}
 
 options("icpsr_email" = "input email address", 
         "icpsr_password" = "input password")
